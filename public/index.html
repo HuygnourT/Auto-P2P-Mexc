@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MEXC P2P Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="noise"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">MEXC <em>P2P</em> Tool</span>
+      </div>
+      <div class="header-right">
+        <div class="status-badge" id="statusBadge">
+          <span class="status-dot"></span>
+          <span id="statusText">Offline</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- Config Panel -->
+    <section class="panel config-panel">
+      <div class="panel-label">01 / CẤU HÌNH</div>
+      <div class="config-grid">
+
+        <!-- Gateway -->
+        <div class="field-group">
+          <label class="field-label">Gateway</label>
+          <div class="toggle-group" id="gatewayToggle">
+            <button class="toggle-btn active" data-value="mexc.com">mexc.com</button>
+            <button class="toggle-btn" data-value="mexc.co">mexc.co</button>
+          </div>
+        </div>
+
+        <!-- Fiat Currency -->
+        <div class="field-group">
+          <label class="field-label">Tiền tệ Fiat</label>
+          <div class="toggle-group" id="fiatToggle">
+            <button class="toggle-btn active" data-value="VND">VND</button>
+            <button class="toggle-btn" data-value="USD">USD</button>
+            <button class="toggle-btn" data-value="EUR">EUR</button>
+            <button class="toggle-btn" data-value="custom">Khác</button>
+          </div>
+          <input type="text" id="customFiat" class="input-field" placeholder="Nhập mã tiền tệ..." style="display:none; margin-top:8px;" />
+        </div>
+
+        <!-- Coin -->
+        <div class="field-group">
+          <label class="field-label">Coin</label>
+          <div class="toggle-group" id="coinToggle">
+            <button class="toggle-btn active" data-value="USDT">USDT</button>
+            <button class="toggle-btn" data-value="BTC">BTC</button>
+            <button class="toggle-btn" data-value="ETH">ETH</button>
+            <button class="toggle-btn" data-value="custom">Khác</button>
+          </div>
+          <input type="text" id="customCoin" class="input-field" placeholder="Nhập mã coin..." style="display:none; margin-top:8px;" />
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Filter Panel -->
+    <section class="panel filter-panel">
+      <div class="panel-label">02 / BỘ LỌC</div>
+      <div class="filter-grid">
+
+        <!-- Side -->
+        <div class="field-group">
+          <label class="field-label">Loại lệnh</label>
+          <div class="toggle-group" id="sideToggle">
+            <button class="toggle-btn active" data-value="">Tất cả</button>
+            <button class="toggle-btn buy"  data-value="BUY">MUA</button>
+            <button class="toggle-btn sell" data-value="SELL">BÁN</button>
+          </div>
+        </div>
+
+        <!-- Amount filter -->
+        <div class="field-group">
+          <label class="field-label">Số tiền Fiat (Amount)</label>
+          <input type="number" id="amountFilter" class="input-field" placeholder="VD: 1000000" min="0" />
+        </div>
+
+        <!-- Quantity filter -->
+        <div class="field-group">
+          <label class="field-label">Số lượng Coin (Quantity)</label>
+          <input type="number" id="quantityFilter" class="input-field" placeholder="VD: 100" min="0" step="any" />
+        </div>
+
+        <!-- Page -->
+        <div class="field-group">
+          <label class="field-label">Trang</label>
+          <div class="page-control">
+            <button class="page-btn" id="prevPage">‹</button>
+            <span id="currentPageDisplay" class="page-num">1</span>
+            <button class="page-btn" id="nextPage">›</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="action-row">
+        <button class="btn-primary" id="fetchBtn">
+          <span class="btn-icon">◈</span>
+          TẢI DỮ LIỆU
+        </button>
+        <button class="btn-secondary" id="refreshBtn">
+          <span class="btn-icon">⟳</span>
+          LÀM MỚI
+        </button>
+        <div class="auto-refresh">
+          <label class="field-label">Tự động làm mới</label>
+          <div class="toggle-group" id="autoRefreshToggle">
+            <button class="toggle-btn active" data-value="0">Tắt</button>
+            <button class="toggle-btn" data-value="10">10s</button>
+            <button class="toggle-btn" data-value="30">30s</button>
+            <button class="toggle-btn" data-value="60">60s</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar" style="display:none">
+      <div class="stat-item">
+        <span class="stat-label">Buy Orders</span>
+        <span class="stat-value green" id="statBuy">—</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">Sell Orders</span>
+        <span class="stat-value red" id="statSell">—</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">Best Buy</span>
+        <span class="stat-value green" id="statBestBuy">—</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">Best Sell</span>
+        <span class="stat-value red" id="statBestSell">—</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">Cập nhật</span>
+        <span class="stat-value" id="statTime">—</span>
+      </div>
+    </div>
+
+    <!-- Results Area -->
+    <section class="results-area" id="resultsArea">
+      <div class="empty-state">
+        <div class="empty-icon">⬡</div>
+        <p>Chọn cấu hình và nhấn <strong>TẢI DỮ LIỆU</strong> để xem danh sách P2P</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay" style="display:none">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p>Đang tải dữ liệu P2P...</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
