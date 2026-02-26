@@ -1,350 +1,457 @@
-// public/js/app.js
-'use strict';
+/**
+ * ============================================================
+ * MEXC P2P System — Frontend Application
+ * ============================================================
+ * Quản lý toàn bộ logic giao diện: kết nối API, hiển thị ads,
+ * chuyển tab, phân trang, toast thông báo.
+ * Sử dụng IIFE pattern (App module) để đóng gói state và methods.
+ * ============================================================
+ */
 
-// ─── State ──────────────────────────────────────────────
-const state = {
-  gateway: 'mexc.com',
-  fiatUnit: 'VND',
-  coinId: 'USDT',
-  side: '',
-  page: 1,
-  amount: '',
-  quantity: '',
-  autoRefreshSecs: 0,
-  autoRefreshTimer: null,
-  lastData: null,
-  loading: false
-};
+const App = (() => {
+  // ─── State: Trạng thái toàn cục của ứng dụng ─────────
+  let state = {
+    connected: false,          // Đã kết nối API chưa
+    currentTab: 'buy',         // Tab đang chọn: 'buy' hoặc 'sell'
+    loading: false,            // Đang tải dữ liệu
+    buyAds: [],                // Danh sách ads BUY từ market
+    sellAds: [],               // Danh sách ads SELL từ market
+    buyPage: { current: 1, total: 1 },   // Phân trang tab BUY
+    sellPage: { current: 1, total: 1 },  // Phân trang tab SELL
+    fiatUnit: 'VND',           // Loại tiền fiat đang lọc
+  };
 
-// ─── Utils ──────────────────────────────────────────────
-function fmt(n, decimals = 2) {
-  if (n == null || n === '') return '—';
-  return parseFloat(n).toLocaleString('vi-VN', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
-  });
-}
+  // ─── API Client: Gửi request đến backend ─────────────
+  const api = {
+    /** Gửi POST request với body JSON */
+    async post(url, data) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
 
-function fmtCoin(n) {
-  if (n == null) return '—';
-  const v = parseFloat(n);
-  if (v >= 1000) return fmt(v, 2);
-  if (v >= 1) return fmt(v, 4);
-  return fmt(v, 6);
-}
+    /** Gửi GET request */
+    async get(url) {
+      const res = await fetch(url);
+      return res.json();
+    },
+  };
 
-function timeStr() {
-  return new Date().toLocaleTimeString('vi-VN');
-}
+  // ─── Kết nối / Ngắt kết nối ──────────────────────────
 
-function showToast(msg, type = 'info') {
-  const toast = document.getElementById('toast');
-  toast.textContent = msg;
-  toast.className = `toast ${type} show`;
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
-}
+  /**
+   * Kết nối đến MEXC API.
+   * Lấy apiKey, secretKey, apiHost từ form input,
+   * gửi POST /api/connect để backend tạo service instance.
+   * Nếu thành công, tự động load ads BUY và SELL.
+   */
+  async function connect() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const secretKey = document.getElementById('secretKey').value.trim();
+    const apiHost = document.getElementById('apiHost').value;
 
-function setStatus(status, text) {
-  const badge = document.getElementById('statusBadge');
-  const label = document.getElementById('statusText');
-  badge.className = `status-badge ${status}`;
-  label.textContent = text;
-}
-
-function toggleVisibility(inputId) {
-  const input = document.getElementById(inputId);
-  input.type = input.type === 'password' ? 'text' : 'password';
-}
-window.toggleVisibility = toggleVisibility;
-
-// ─── Toggle Groups ───────────────────────────────────────
-function initToggleGroup(groupId, onChange) {
-  const group = document.getElementById(groupId);
-  if (!group) return;
-  group.querySelectorAll('.toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      onChange(btn.dataset.value);
-    });
-  });
-}
-
-initToggleGroup('gatewayToggle', v => { state.gateway = v; });
-
-initToggleGroup('fiatToggle', v => {
-  const customInput = document.getElementById('customFiat');
-  if (v === 'custom') {
-    customInput.style.display = 'block';
-    customInput.focus();
-    state.fiatUnit = customInput.value || 'VND';
-  } else {
-    customInput.style.display = 'none';
-    state.fiatUnit = v;
-  }
-});
-
-document.getElementById('customFiat').addEventListener('input', e => {
-  state.fiatUnit = e.target.value.toUpperCase() || 'VND';
-});
-
-initToggleGroup('coinToggle', v => {
-  const customInput = document.getElementById('customCoin');
-  if (v === 'custom') {
-    customInput.style.display = 'block';
-    customInput.focus();
-    state.coinId = customInput.value || 'USDT';
-  } else {
-    customInput.style.display = 'none';
-    state.coinId = v;
-  }
-});
-
-document.getElementById('customCoin').addEventListener('input', e => {
-  state.coinId = e.target.value.toUpperCase() || 'USDT';
-});
-
-initToggleGroup('sideToggle', v => { state.side = v; });
-
-initToggleGroup('autoRefreshToggle', v => {
-  const secs = parseInt(v) || 0;
-  state.autoRefreshSecs = secs;
-  clearInterval(state.autoRefreshTimer);
-  if (secs > 0) {
-    state.autoRefreshTimer = setInterval(() => fetchData(), secs * 1000);
-    showToast(`Tự động làm mới mỗi ${secs}s`, 'info');
-  }
-});
-
-// ─── Pagination ──────────────────────────────────────────
-function updatePageDisplay() {
-  document.getElementById('currentPageDisplay').textContent = state.page;
-}
-
-document.getElementById('prevPage').addEventListener('click', () => {
-  if (state.page > 1) { state.page--; updatePageDisplay(); }
-});
-
-document.getElementById('nextPage').addEventListener('click', () => {
-  state.page++;
-  updatePageDisplay();
-});
-
-// ─── API Call ────────────────────────────────────────────
-async function fetchData() {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  const secretKey = document.getElementById('secretKey').value.trim();
-
-  if (!apiKey || !secretKey) {
-    showToast('Vui lòng nhập API Key và Secret Key!', 'error');
-    return;
-  }
-
-  if (state.loading) return;
-  state.loading = true;
-
-  document.getElementById('loadingOverlay').style.display = 'flex';
-  document.getElementById('fetchBtn').disabled = true;
-  setStatus('', 'Đang tải...');
-
-  try {
-    const params = new URLSearchParams({
-      gateway: state.gateway,
-      fiatUnit: state.fiatUnit,
-      coinId: state.coinId,
-      page: state.page
-    });
-
-    if (state.side) params.set('side', state.side);
-
-    const amountVal = document.getElementById('amountFilter').value;
-    const quantityVal = document.getElementById('quantityFilter').value;
-    if (amountVal) params.set('amount', amountVal);
-    if (quantityVal) params.set('quantity', quantityVal);
-
-    const response = await fetch(`/api/p2p/ads?${params.toString()}`, {
-      headers: {
-        'x-api-key': apiKey,
-        'x-secret-key': secretKey
-      }
-    });
-
-    const json = await response.json();
-
-    if (!json.success) {
-      throw new Error(json.error || 'Lỗi không xác định');
+    if (!apiKey || !secretKey) {
+      showToast('Vui lòng nhập API Key và Secret Key', 'error');
+      return;
     }
 
-    state.lastData = json;
-    renderResults(json);
-    setStatus('online', 'Đã kết nối');
-    showToast('Tải dữ liệu thành công!', 'success');
+    setLoading(true, 'connectBtn');
+    try {
+      const result = await api.post('/api/connect', { apiKey, secretKey, apiHost });
 
-  } catch (err) {
-    setStatus('error', 'Lỗi kết nối');
-    showToast(`Lỗi: ${err.message}`, 'error');
-    renderError(err.message);
-    console.error(err);
-  } finally {
-    state.loading = false;
-    document.getElementById('loadingOverlay').style.display = 'none';
-    document.getElementById('fetchBtn').disabled = false;
-  }
-}
-
-// ─── Render ──────────────────────────────────────────────
-function renderResults(json) {
-  const area = document.getElementById('resultsArea');
-  const statsBar = document.getElementById('statsBar');
-  statsBar.style.display = 'flex';
-
-  const isBothSides = json.data && json.data.buy !== undefined && json.data.sell !== undefined;
-
-  if (isBothSides) {
-    const buyList = extractAds(json.data.buy);
-    const sellList = extractAds(json.data.sell);
-
-    // Stats
-    document.getElementById('statBuy').textContent = buyList.length;
-    document.getElementById('statSell').textContent = sellList.length;
-    document.getElementById('statBestBuy').textContent = buyList.length ? fmt(buyList[0].price) : '—';
-    document.getElementById('statBestSell').textContent = sellList.length ? fmt(sellList[0].price) : '—';
-    document.getElementById('statTime').textContent = timeStr();
-
-    area.innerHTML = `
-      <div class="tabs-header">
-        <button class="tab-btn active buy" data-tab="buy" onclick="switchTab('buy')">
-          MUA <span class="tab-count">${buyList.length}</span>
-        </button>
-        <button class="tab-btn sell" data-tab="sell" onclick="switchTab('sell')">
-          BÁN <span class="tab-count">${sellList.length}</span>
-        </button>
-      </div>
-      <div id="tab-buy" class="ads-content fade-in">${renderTable(buyList, 'BUY', json.filters?.fiatUnit, json.filters?.coinId)}</div>
-      <div id="tab-sell" class="ads-content fade-in" style="display:none">${renderTable(sellList, 'SELL', json.filters?.fiatUnit, json.filters?.coinId)}</div>
-    `;
-  } else {
-    // Single side
-    const ads = extractAds(json.data);
-    const side = json.data?.side || '';
-    document.getElementById('statBuy').textContent = side === 'BUY' ? ads.length : '—';
-    document.getElementById('statSell').textContent = side === 'SELL' ? ads.length : '—';
-    document.getElementById('statBestBuy').textContent = (side === 'BUY' && ads.length) ? fmt(ads[0].price) : '—';
-    document.getElementById('statBestSell').textContent = (side === 'SELL' && ads.length) ? fmt(ads[0].price) : '—';
-    document.getElementById('statTime').textContent = timeStr();
-
-    area.innerHTML = `
-      <div class="ads-content fade-in">
-        ${renderTable(ads, side, json.filters?.fiatUnit, json.filters?.coinId)}
-      </div>
-    `;
-  }
-}
-
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
-  });
-  document.getElementById('tab-buy').style.display = tab === 'buy' ? 'block' : 'none';
-  document.getElementById('tab-sell').style.display = tab === 'sell' ? 'block' : 'none';
-}
-window.switchTab = switchTab;
-
-function extractAds(data) {
-  if (!data) return [];
-  if (data.error) return [];
-  // Try common response shapes
-  return data.data?.list || data.data || data.list || data.rows || [];
-}
-
-function renderTable(ads, side, fiatUnit = 'VND', coinId = 'USDT') {
-  if (!ads || ads.length === 0) {
-    return `<div class="empty-state"><div class="empty-icon">○</div><p>Không có dữ liệu ${side} ads</p></div>`;
+      if (result.code === 0) {
+        state.connected = true;
+        updateConnectionUI(true, apiHost);
+        showToast('Kết nối thành công!', 'success');
+        // Tự động tải danh sách ads sau khi kết nối
+        await loadMarketAds('BUY');
+        await loadMarketAds('SELL');
+      } else {
+        showToast(result.msg || 'Kết nối thất bại', 'error');
+      }
+    } catch (err) {
+      showToast('Lỗi kết nối: ' + err.message, 'error');
+    } finally {
+      setLoading(false, 'connectBtn');
+    }
   }
 
-  const rows = ads.map((ad, i) => {
-    const price = ad.price || ad.adPrice || ad.tradePrice || '—';
-    const available = ad.surplusAmount || ad.availableAmount || ad.quantity || '—';
-    const minAmt = ad.minTradeAmount || ad.minAmount || '—';
-    const maxAmt = ad.maxTradeAmount || ad.maxAmount || '—';
-    const merchantName = ad.nickName || ad.merchantName || ad.username || 'Ẩn danh';
-    const completedOrders = ad.finishRate != null ? `${(ad.finishRate * 100).toFixed(1)}%` : (ad.completedOrderNum != null ? `${ad.completedOrderNum} lệnh` : '—');
-    const payMethods = Array.isArray(ad.payMethodList)
-      ? ad.payMethodList.map(p => `<span class="pay-tag">${p.payMethodName || p.name || p}</span>`).join('')
-      : (ad.payMethodList || '—');
+  /**
+   * Ngắt kết nối API.
+   * Gọi POST /api/disconnect, xóa dữ liệu ads, cập nhật giao diện.
+   */
+  async function disconnect() {
+    await api.post('/api/disconnect');
+    state.connected = false;
+    state.buyAds = [];
+    state.sellAds = [];
+    updateConnectionUI(false);
+    renderAdsTable('buy');
+    renderAdsTable('sell');
+    showToast('Đã ngắt kết nối', 'info');
+  }
 
-    const sideClass = (ad.tradeType === 'BUY' || side === 'BUY') ? 'buy' : 'sell';
+  // ─── Lấy dữ liệu Market Ads ─────────────────────────
 
-    return `
-      <tr>
-        <td>${i + 1}</td>
-        <td>
-          <div class="merchant-cell">
-            <span class="merchant-name">${merchantName}</span>
-            <span class="merchant-orders">${completedOrders}</span>
-          </div>
-        </td>
-        <td><span class="price-cell ${sideClass}">${fmt(price)}</span> <span style="color:var(--text-dim);font-size:10px">${fiatUnit}</span></td>
-        <td>
-          <div class="limit-bar">
-            <span class="limit-avail">${fmtCoin(available)} ${coinId}</span>
-            <span class="limit-text">Giới hạn: ${fmt(minAmt, 0)} – ${fmt(maxAmt, 0)} ${fiatUnit}</span>
-          </div>
-        </td>
-        <td><div class="payment-tags">${payMethods}</div></td>
-        <td><span class="badge badge-${sideClass}">${(ad.tradeType || side)}</span></td>
-      </tr>
+  /**
+   * Lấy danh sách quảng cáo từ market theo side (BUY/SELL).
+   * Gọi GET /api/market/ads với fiatUnit và page.
+   * Lưu kết quả vào state rồi render bảng HTML.
+   * @param {string} side - 'BUY' hoặc 'SELL'
+   * @param {number} page - Số trang (mặc định 1)
+   */
+  async function loadMarketAds(side, page = 1) {
+    if (!state.connected) return;
+
+    const fiatUnit = document.getElementById('fiatFilter')?.value || state.fiatUnit;
+    state.fiatUnit = fiatUnit;
+
+    const tabKey = side === 'BUY' ? 'buy' : 'sell';
+    setTableLoading(tabKey, true);
+
+    try {
+      const result = await api.get(
+        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}`
+      );
+
+      if (result.code === 0) {
+        state[`${tabKey}Ads`] = result.data || [];
+        state[`${tabKey}Page`] = {
+          current: result.page?.currPage || 1,
+          total: result.page?.totalPage || 1,
+        };
+      } else {
+        showToast(`Lỗi lấy dữ liệu ${side}: ${result.msg}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Lỗi: ${err.message}`, 'error');
+    } finally {
+      setTableLoading(tabKey, false);
+      renderAdsTable(tabKey);
+    }
+  }
+
+  /**
+   * Làm mới dữ liệu ads của tab đang hiển thị.
+   * Gọi lại loadMarketAds với side tương ứng, quay về trang 1.
+   */
+  async function refreshAds() {
+    const side = state.currentTab === 'buy' ? 'BUY' : 'SELL';
+    await loadMarketAds(side, 1);
+  }
+
+  /**
+   * Chuyển trang (trước/sau) trong danh sách ads.
+   * @param {number} direction - +1 (trang sau) hoặc -1 (trang trước)
+   */
+  async function changePage(direction) {
+    const tabKey = state.currentTab;
+    const pageState = state[`${tabKey}Page`];
+    const newPage = pageState.current + direction;
+
+    if (newPage < 1 || newPage > pageState.total) return;
+
+    const side = tabKey === 'buy' ? 'BUY' : 'SELL';
+    await loadMarketAds(side, newPage);
+  }
+
+  // ─── Render giao diện ────────────────────────────────
+
+  /**
+   * Render bảng danh sách ads (BUY hoặc SELL) vào HTML.
+   * Nếu không có ads, hiển thị empty state.
+   * Mỗi row hiển thị: tên merchant, giá, số lượng, giới hạn, phương thức thanh toán.
+   * @param {string} tabKey - 'buy' hoặc 'sell'
+   */
+  function renderAdsTable(tabKey) {
+    const ads = state[`${tabKey}Ads`];
+    const container = document.getElementById(`${tabKey}TableBody`);
+    const pageInfo = state[`${tabKey}Page`];
+
+    if (!container) return;
+
+    if (!ads || ads.length === 0) {
+      container.innerHTML = `
+        <tr class="empty-row">
+          <td colspan="7">
+            <div class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <p>${state.connected ? 'Không có quảng cáo nào' : 'Kết nối để xem quảng cáo'}</p>
+            </div>
+          </td>
+        </tr>`;
+      updatePagination(tabKey, pageInfo);
+      return;
+    }
+
+    // Render từng row ads với thông tin merchant, giá, số lượng, ...
+    container.innerHTML = ads.map((ad, i) => {
+      const merchant = ad.merchant || {};
+      const stats = ad.merchantStatistics || {};
+      const completionRate = stats.completeRate
+        ? (parseFloat(stats.completeRate) * 100).toFixed(1)
+        : '0';
+      const totalOrders = (stats.totalBuyCount || 0) + (stats.totalSellCount || 0);
+
+      return `
+        <tr class="ad-row" style="animation-delay: ${i * 0.05}s">
+          <td class="merchant-cell">
+            <div class="merchant-info">
+              <span class="merchant-name">${escapeHtml(merchant.nickName || 'N/A')}</span>
+              <span class="merchant-meta">
+                ${totalOrders} lệnh · ${completionRate}% hoàn thành
+              </span>
+            </div>
+          </td>
+          <td class="price-cell">
+            <span class="price-value ${tabKey === 'buy' ? 'price-buy' : 'price-sell'}">
+              ${formatNumber(ad.price)}
+            </span>
+            <span class="price-fiat">${ad.fiatUnit || ''}</span>
+          </td>
+          <td class="quantity-cell">
+            <span>${formatNumber(ad.availableQuantity)} ${ad.coinName || 'USDT'}</span>
+          </td>
+          <td class="limit-cell">
+            <span>${formatNumber(ad.minSingleTransAmount)} - ${formatNumber(ad.maxSingleTransAmount)}</span>
+            <span class="limit-fiat">${ad.fiatUnit || ''}</span>
+          </td>
+          <td class="payment-cell">
+            <span class="payment-badge">${getPayMethodName(ad.payMethod)}</span>
+          </td>
+          <td class="time-cell">
+            <span>${ad.payTimeLimit || 15} phút</span>
+          </td>
+          <td class="action-cell">
+            <button class="btn-trade btn-trade-${tabKey}" onclick="App.viewAd('${ad.advNo}')">
+              ${tabKey === 'buy' ? 'Mua' : 'Bán'}
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    updatePagination(tabKey, pageInfo);
+  }
+
+  /**
+   * Cập nhật UI phân trang: nút Trước, Sau, và thông tin trang hiện tại.
+   * @param {string} tabKey - 'buy' hoặc 'sell'
+   * @param {Object} pageInfo - { current, total }
+   */
+  function updatePagination(tabKey, pageInfo) {
+    const el = document.getElementById(`${tabKey}Pagination`);
+    if (!el) return;
+
+    el.innerHTML = `
+      <button class="btn-page" onclick="App.changePage(-1)" ${pageInfo.current <= 1 ? 'disabled' : ''}>
+        ‹ Trước
+      </button>
+      <span class="page-info">Trang ${pageInfo.current} / ${pageInfo.total}</span>
+      <button class="btn-page" onclick="App.changePage(1)" ${pageInfo.current >= pageInfo.total ? 'disabled' : ''}>
+        Sau ›
+      </button>
     `;
-  }).join('');
+  }
 
-  return `
-    <div class="table-wrapper">
-      <table class="ads-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Người đăng</th>
-            <th>Giá (${fiatUnit})</th>
-            <th>Khả dụng / Giới hạn</th>
-            <th>Phương thức</th>
-            <th>Loại</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
-}
+  /**
+   * Chuyển đổi tab BUY / SELL.
+   * Cập nhật class active cho button tab và panel tương ứng.
+   * @param {string} tab - 'buy' hoặc 'sell'
+   */
+  function switchTab(tab) {
+    state.currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === `${tab}Panel`);
+    });
+  }
 
-function renderError(msg) {
-  const area = document.getElementById('resultsArea');
-  area.innerHTML = `
-    <div class="error-msg">
-      <strong>⚠ Lỗi tải dữ liệu</strong>
-      ${msg}
-    </div>
-  `;
-}
+  /**
+   * Cập nhật giao diện khi trạng thái kết nối thay đổi.
+   * Connected: hiện nút Ngắt kết nối, khóa input, đổi status dot sang xanh.
+   * Disconnected: hiện nút Kết nối, mở khóa input, status dot xám.
+   * @param {boolean} connected - Trạng thái kết nối
+   * @param {string} host - Tên host đang kết nối
+   */
+  function updateConnectionUI(connected, host) {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const credSection = document.getElementById('credentialInputs');
 
-// ─── Events ──────────────────────────────────────────────
-document.getElementById('fetchBtn').addEventListener('click', () => {
-  state.page = 1;
-  updatePageDisplay();
-  fetchData();
-});
+    if (connected) {
+      statusDot.className = 'status-dot connected';
+      statusText.textContent = `Đã kết nối · ${host}`;
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-flex';
+      credSection.classList.add('locked');
+    } else {
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Chưa kết nối';
+      connectBtn.style.display = 'inline-flex';
+      disconnectBtn.style.display = 'none';
+      credSection.classList.remove('locked');
+    }
+  }
 
-document.getElementById('refreshBtn').addEventListener('click', () => {
-  fetchData();
-});
+  // ─── Hàm tiện ích (Helpers) ──────────────────────────
 
-// Allow Enter to trigger fetch from input fields
-['apiKey', 'secretKey', 'amountFilter', 'quantityFilter'].forEach(id => {
-  document.getElementById(id)?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') fetchData();
-  });
-});
+  /**
+   * Hiển thị toast thông báo ở góc trên phải màn hình.
+   * Tự động biến mất sau 3.5 giây.
+   * @param {string} message - Nội dung thông báo
+   * @param {string} type - Loại: 'success', 'error', hoặc 'info'
+   */
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+      <span>${message}</span>
+    `;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  }
 
-// ─── Init ────────────────────────────────────────────────
-updatePageDisplay();
-console.log('%c MEXC P2P Tool v1.0.0 ', 'background:#f0c040;color:#000;font-weight:bold;padding:4px 12px;border-radius:3px;');
+  /**
+   * Bật/tắt trạng thái loading cho button (disabled + spinner animation).
+   * @param {boolean} loading - true = đang tải, false = xong
+   * @param {string} btnId - ID của button element
+   */
+  function setLoading(loading, btnId) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.classList.toggle('loading', loading);
+  }
+
+  /**
+   * Bật/tắt overlay loading cho bảng ads (mờ bảng + text "Đang tải...").
+   * @param {string} tabKey - 'buy' hoặc 'sell'
+   * @param {boolean} loading - true = đang tải
+   */
+  function setTableLoading(tabKey, loading) {
+    const panel = document.getElementById(`${tabKey}Panel`);
+    if (!panel) return;
+    panel.classList.toggle('table-loading', loading);
+  }
+
+  /**
+   * Format số thành chuỗi có dấu phân cách hàng nghìn (kiểu Việt Nam).
+   * Ví dụ: 25000 → "25.000", 1.2345 → "1,2345"
+   * @param {number|string} num - Số cần format
+   * @returns {string} Chuỗi đã format
+   */
+  function formatNumber(num) {
+    if (!num && num !== 0) return '—';
+    const n = parseFloat(num);
+    if (isNaN(n)) return num;
+    return n.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
+  }
+
+  /**
+   * Escape HTML để tránh XSS khi hiển thị dữ liệu từ API.
+   * Chuyển ký tự đặc biệt (<, >, &, ", ') thành HTML entities.
+   * @param {string} str - Chuỗi cần escape
+   * @returns {string} Chuỗi an toàn cho innerHTML
+   */
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /**
+   * Chuyển mã phương thức thanh toán (số) thành tên hiển thị.
+   * Ví dụ: "1" → "Ngân hàng", "2" → "Momo"
+   * Nếu không nhận diện được, hiển thị "PM-{mã}".
+   * @param {string} methodStr - Chuỗi mã payment (có thể chứa nhiều mã phân tách bởi dấu phẩy)
+   * @returns {string} Tên phương thức thanh toán
+   */
+  function getPayMethodName(methodStr) {
+    if (!methodStr) return 'N/A';
+    const methods = {
+      '1': 'Ngân hàng',
+      '2': 'Momo',
+      '3': 'ZaloPay',
+      '4': 'VNPAY',
+      '5': 'Tiền mặt',
+    };
+    return methodStr.split(',').map(m => methods[m.trim()] || `PM-${m.trim()}`).join(', ');
+  }
+
+  /**
+   * Xem chi tiết quảng cáo (placeholder cho chức năng tương lai).
+   * Hiện tại chỉ hiện toast với mã advNo.
+   * @param {string} advNo - Mã quảng cáo
+   */
+  function viewAd(advNo) {
+    showToast(`Chi tiết quảng cáo: ${advNo}`, 'info');
+  }
+
+  /**
+   * Toggle hiển thị/ẩn Secret Key input (password ↔ text).
+   * @param {string} inputId - ID của input element
+   */
+  function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  // ─── Khởi tạo ────────────────────────────────────────
+
+  /**
+   * Hàm khởi tạo chạy khi DOM loaded.
+   * 1. Kiểm tra trạng thái kết nối từ backend (nếu đã kết nối trước đó).
+   * 2. Tải cấu hình (danh sách API host) từ backend để render dropdown.
+   * 3. Nếu đã kết nối, tự động load ads BUY và SELL.
+   */
+  async function init() {
+    // Kiểm tra trạng thái kết nối hiện tại
+    const status = await api.get('/api/status');
+    if (status.data?.connected) {
+      state.connected = true;
+      updateConnectionUI(true, '');
+      await loadMarketAds('BUY');
+      await loadMarketAds('SELL');
+    }
+
+    // Tải danh sách API host từ backend config
+    const config = await api.get('/api/config');
+    if (config.data?.apiHosts) {
+      const select = document.getElementById('apiHost');
+      select.innerHTML = config.data.apiHosts
+        .map(h => `<option value="${h.value}">${h.label}</option>`)
+        .join('');
+    }
+  }
+
+  // ─── Public API: Các hàm được gọi từ HTML onclick ────
+  return {
+    init,                        // Khởi tạo ứng dụng
+    connect,                     // Kết nối API
+    disconnect,                  // Ngắt kết nối
+    switchTab,                   // Chuyển tab BUY/SELL
+    refreshAds,                  // Làm mới dữ liệu ads
+    changePage,                  // Chuyển trang
+    loadMarketAds,               // Tải ads từ market
+    viewAd,                      // Xem chi tiết ads
+    togglePasswordVisibility,    // Hiện/ẩn Secret Key
+  };
+})();
+
+// Chạy init() khi trang web load xong
+document.addEventListener('DOMContentLoaded', App.init);

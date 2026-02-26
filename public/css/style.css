@@ -1,641 +1,777 @@
-/* public/css/style.css */
+/* ═══════════════════════════════════════════════════════
+   MEXC P2P System — Giao diện Dark Trading Terminal
+   ═══════════════════════════════════════════════════════
+
+   Cấu trúc CSS:
+     1. Biến CSS (CSS Variables)  — Màu sắc, font, spacing
+     2. Reset & Base              — Reset mặc định trình duyệt
+     3. Layout                    — Bố cục chính
+     4. Header                    — Thanh tiêu đề + trạng thái kết nối
+     5. Card                      — Khung chứa nội dung
+     6. Form Elements             — Input, select, button
+     7. Tabs                      — Tab BUY/SELL
+     8. Table                     — Bảng danh sách quảng cáo
+     9. Pagination                — Phân trang
+    10. Toast                     — Thông báo popup
+    11. Responsive                — Tương thích mobile
+*/
+
+/* ─── Import Google Fonts ──────────────────────────────
+   JetBrains Mono: font monospace cho số liệu, giá cả
+   Instrument Sans: font body chính cho text thường
+*/
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+
+/* ═══ 1. BIẾN CSS (CSS Variables) ═══════════════════════
+   Tập trung toàn bộ màu sắc & giá trị ở đây.
+   Khi muốn đổi theme, chỉ cần sửa các biến này.
+*/
 :root {
-  --bg: #0a0a0b;
-  --surface: #111114;
-  --surface2: #18181d;
-  --border: #2a2a35;
-  --border-hover: #44445a;
-  --text: #e8e8f0;
-  --text-muted: #666680;
-  --text-dim: #444458;
-  --accent: #f0c040;
-  --accent-dim: rgba(240,192,64,0.15);
-  --green: #3ddc84;
-  --green-dim: rgba(61,220,132,0.12);
-  --red: #ff5b6b;
-  --red-dim: rgba(255,91,107,0.12);
-  --blue: #4da6ff;
-  --radius: 4px;
-  --font-mono: 'Space Mono', monospace;
-  --font-display: 'Syne', sans-serif;
+  /* Màu nền — từ tối nhất đến sáng nhất */
+  --bg-primary: #0a0e17;      /* Nền chính (body) */
+  --bg-secondary: #111827;     /* Nền phụ (header bảng) */
+  --bg-card: #151d2e;          /* Nền card */
+  --bg-elevated: #1a2332;      /* Nền nổi (toast, dropdown) */
+  --bg-input: #0d1420;         /* Nền ô input */
+  --border: #1e2a3a;           /* Viền mặc định */
+  --border-focus: #3b82f6;     /* Viền khi focus (xanh dương) */
+
+  /* Màu chữ */
+  --text-primary: #e8ecf1;     /* Chữ chính (trắng nhạt) */
+  --text-secondary: #7b8ca5;   /* Chữ phụ (xám nhạt) */
+  --text-muted: #4a5568;       /* Chữ mờ (xám đậm) */
+
+  /* Màu nhấn */
+  --accent-blue: #3b82f6;             /* Xanh dương — nút chính, link */
+  --accent-blue-glow: rgba(59, 130, 246, 0.15); /* Hiệu ứng glow xanh */
+  --green: #22c55e;                    /* Xanh lá — giá MUA, thành công */
+  --green-bg: rgba(34, 197, 94, 0.08); /* Nền xanh lá nhạt */
+  --green-glow: rgba(34, 197, 94, 0.2);
+  --red: #ef4444;                      /* Đỏ — giá BÁN, lỗi */
+  --red-bg: rgba(239, 68, 68, 0.08);
+  --red-glow: rgba(239, 68, 68, 0.2);
+  --amber: #f59e0b;                    /* Vàng — cảnh báo */
+
+  /* Font chữ */
+  --font-body: 'Instrument Sans', -apple-system, sans-serif; /* Font body */
+  --font-mono: 'JetBrains Mono', monospace;                  /* Font số liệu */
+
+  /* Bo góc */
+  --radius: 10px;     /* Bo góc mặc định */
+  --radius-sm: 6px;   /* Bo góc nhỏ */
 }
+
+/* ═══ 2. RESET & BASE ══════════════════════════════════ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
-
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   min-height: 100vh;
-  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased; /* Font mượt hơn trên Mac */
 }
 
-/* Noise texture overlay */
-.noise {
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.4;
+/* ═══ 3. LAYOUT ════════════════════════════════════════ */
+
+.app-container {
+  max-width: 1280px;
+  margin: 0 auto;      /* Căn giữa */
+  padding: 24px 20px;
 }
 
-/* Header */
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(10,10,11,0.95);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-}
-
-.header-inner {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 56px;
+/* ═══ 4. HEADER ════════════════════════════════════════
+   Gồm: Logo + tên app (bên trái) | Trạng thái kết nối (bên phải)
+*/
+.app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
 
-.logo {
+.logo-section {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: -0.5px;
+  gap: 14px;
 }
 
+/* Icon logo — hình vuông bo góc với gradient */
 .logo-icon {
-  color: var(--accent);
-  font-size: 22px;
-  animation: pulse 3s ease-in-out infinite;
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, var(--accent-blue), #6366f1);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: #fff;
+  letter-spacing: -0.5px;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.25);
 }
 
-.logo em {
-  color: var(--accent);
-  font-style: normal;
+/* Tên app — gradient text effect */
+.logo-text h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #e8ecf1, #a8b8cc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.status-badge {
+.logo-text span {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Trạng thái kết nối — chấm tròn + text */
+.connection-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  background: var(--surface);
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
 }
 
+/* Chấm trạng thái — xám khi chưa kết nối */
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--text-dim);
-  transition: background 0.3s;
+  background: var(--text-muted);
+  transition: all 0.3s;
 }
 
-.status-badge.online .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 2s ease-in-out infinite; }
-.status-badge.error .status-dot { background: var(--red); }
-
-/* Main layout */
-.main {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+/* Chấm trạng thái — xanh lá + hiệu ứng nhấp nháy khi đã kết nối */
+.status-dot.connected {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+  animation: pulse 2s infinite;
 }
 
-/* Panel */
-.panel {
-  background: var(--surface);
+/* Hiệu ứng nhấp nháy (pulse) cho chấm kết nối */
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--green-glow); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* ═══ 5. CARD ══════════════════════════════════════════
+   Khung chứa nội dung — dùng cho phần credentials và danh sách ads
+*/
+.card {
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
-  position: relative;
-}
-
-.panel-label {
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--accent);
   margin-bottom: 20px;
 }
 
-/* Config Grid */
-.config-grid {
-  display: grid;
-  grid-template-columns: auto 1fr 1fr;
-  gap: 20px;
-  align-items: start;
-}
-
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  align-items: start;
-}
-
-/* Field */
-.field-group { display: flex; flex-direction: column; gap: 8px; }
-
-.field-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 2px;
+/* Tiêu đề card — chữ in hoa, có icon SVG bên trái */
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* Input */
-.input-wrapper { position: relative; }
+.card-title svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
 
-.input-field {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-family: var(--font-mono);
+/* ═══ 6. FORM ELEMENTS ════════════════════════════════ */
+
+/* Grid layout cho form input — 2 cột + nút */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Label cho ô input */
+.form-group label {
   font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+/* Style chung cho input và select */
+input, select {
+  width: 100%;
   padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.input-field:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+/* Hiệu ứng focus — viền xanh + glow */
+input:focus, select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-blue-glow);
 }
 
-.input-field::placeholder { color: var(--text-dim); }
+input::placeholder {
+  color: var(--text-muted);
+}
 
-.input-wrapper .input-field { padding-right: 40px; }
-
-.toggle-visibility {
+/* Nút ẩn/hiện password (icon mắt) */
+.input-toggle {
   position: absolute;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  cursor: pointer;
-  font-size: 14px;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-.toggle-visibility:hover { opacity: 1; }
-
-/* Toggle Group */
-.toggle-group {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.toggle-btn {
-  padding: 7px 14px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.15s;
+  padding: 4px;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.input-toggle:hover {
+  color: var(--text-secondary);
+}
+
+/* Select dropdown — custom arrow icon */
+select {
+  cursor: pointer;
+  appearance: none;  /* Ẩn arrow mặc định của trình duyệt */
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%237b8ca5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+/* Hàng chọn API Host */
+.host-select-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.host-select-row .form-group {
+  flex: 1;
+}
+
+/* ─── Nút bấm (Buttons) ─────────────────────────────── */
+
+.btn {
+  padding: 10px 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   white-space: nowrap;
 }
 
-.toggle-btn:hover { border-color: var(--border-hover); color: var(--text); }
-
-.toggle-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #000;
-}
-
-.toggle-btn.buy.active { background: var(--green); border-color: var(--green); color: #000; }
-.toggle-btn.sell.active { background: var(--red); border-color: var(--red); color: #fff; }
-
-/* Page Control */
-.page-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.page-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.page-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-.page-num {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  min-width: 30px;
-  text-align: center;
-  color: var(--accent);
-}
-
-/* Action Row */
-.action-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
-
+/* Nút chính — nền xanh dương */
 .btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 28px;
-  background: var(--accent);
-  border: none;
-  border-radius: var(--radius);
-  color: #000;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  cursor: pointer;
-  transition: all 0.2s;
+  background: var(--accent-blue);
+  color: #fff;
 }
 
-.btn-primary:hover {
-  background: #ffd060;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(240,192,64,0.3);
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
-.btn-primary:active { transform: translateY(0); }
+/* Nút nguy hiểm — viền đỏ, nền đỏ nhạt */
+.btn-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
 
-.btn-primary:disabled {
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Nút ghost — trong suốt, viền mờ */
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+/* Nút disabled — mờ đi, không click được */
+.btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
-.btn-secondary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
+/* Trạng thái loading — ẩn text, hiện spinner */
+.btn.loading {
+  position: relative;
+  color: transparent;
 }
 
-.btn-secondary:hover { border-color: var(--border-hover); }
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
 
-.btn-icon { font-size: 14px; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
-.auto-refresh {
+.btn-row {
   display: flex;
-  align-items: center;
   gap: 10px;
-  margin-left: auto;
+  margin-top: 14px;
 }
 
-/* Stats Bar */
-.stats-bar {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  overflow-x: auto;
+/* ─── Trạng thái khóa input khi đã kết nối ──────────── */
+.locked input,
+.locked select {
+  opacity: 0.5;
+  pointer-events: none;  /* Không cho click/nhập */
 }
 
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 24px;
-  flex-shrink: 0;
-}
-
-.stat-item:first-child { padding-left: 0; }
-
-.stat-label {
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.stat-value {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.stat-value.green { color: var(--green); }
-.stat-value.red { color: var(--red); }
-
-.stat-divider {
-  width: 1px;
-  height: 40px;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
-/* Results Area */
-.results-area {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  min-height: 300px;
-  overflow: hidden;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 40px;
-  gap: 16px;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 40px;
-  opacity: 0.3;
-  animation: float 4s ease-in-out infinite;
-}
-
-/* Tabs */
+/* ═══ 7. TABS ══════════════════════════════════════════
+   2 tab: BUY (xanh lá) và SELL (đỏ)
+*/
 .tabs-header {
   display: flex;
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 20px;
 }
 
 .tab-btn {
-  padding: 14px 24px;
-  background: none;
+  padding: 10px 24px;
+  background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
   color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: -1px;
 }
 
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active.buy { color: var(--green); border-bottom-color: var(--green); }
-.tab-btn.active.sell { color: var(--red); border-bottom-color: var(--red); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-.tab-count {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  font-size: 10px;
-  background: var(--surface2);
+.tab-btn:hover {
+  color: var(--text-secondary);
 }
 
-/* Ads Table */
-.ads-content { padding: 20px; }
+/* Tab BUY active → nền xanh nhạt, chữ xanh */
+.tab-btn.active[data-tab="buy"] {
+  color: var(--green);
+  background: var(--green-bg);
+}
 
-.table-wrapper { overflow-x: auto; }
+/* Tab SELL active → nền đỏ nhạt, chữ đỏ */
+.tab-btn.active[data-tab="sell"] {
+  color: var(--red);
+  background: var(--red-bg);
+}
 
-.ads-table {
-  width: 100%;
-  border-collapse: collapse;
+/* Khu vực actions bên phải tabs (dropdown fiat + nút refresh) */
+.tabs-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fiat-select {
+  width: 100px;
+  padding: 7px 10px;
   font-size: 12px;
 }
 
-.ads-table thead tr {
-  border-bottom: 1px solid var(--border);
+/* ─── Tab Panels — hiện/ẩn nội dung theo tab đang chọn ─ */
+.tab-panel {
+  display: none;
 }
 
-.ads-table th {
-  padding: 10px 14px;
+.tab-panel.active {
+  display: block;
+  animation: fadeIn 0.25s ease;
+}
+
+/* Hiệu ứng fade in khi chuyển tab */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══ 8. TABLE ═════════════════════════════════════════
+   Bảng hiển thị danh sách quảng cáo P2P
+*/
+.table-wrapper {
+  overflow-x: auto;  /* Scroll ngang trên mobile */
+  border-radius: var(--radius-sm);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+/* Header bảng */
+thead th {
   text-align: left;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
-.ads-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  color: var(--text);
+/* Ô dữ liệu */
+tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(30, 42, 58, 0.5);
   vertical-align: middle;
 }
 
-.ads-table tr:last-child td { border-bottom: none; }
-
-.ads-table tbody tr {
-  transition: background 0.1s;
+/* Hiệu ứng trượt vào cho mỗi dòng (staggered animation) */
+.ad-row {
+  animation: rowSlide 0.3s ease forwards;
+  opacity: 0;
+  transition: background 0.15s;
 }
-.ads-table tbody tr:hover { background: var(--surface2); }
 
+.ad-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@keyframes rowSlide {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ─── Cột Merchant ───────────────────────────────────── */
+.merchant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.merchant-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+/* Dòng phụ: số lệnh + tỷ lệ hoàn thành */
+.merchant-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ─── Cột Giá ────────────────────────────────────────── */
 .price-cell {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.price-cell.buy { color: var(--green); }
-.price-cell.sell { color: var(--red); }
-
-.badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.badge-buy { background: var(--green-dim); color: var(--green); }
-.badge-sell { background: var(--red-dim); color: var(--red); }
-
-.merchant-cell {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.merchant-name {
+.price-value {
+  font-family: var(--font-mono);
   font-weight: 700;
-  color: var(--text);
+  font-size: 15px;
 }
 
-.merchant-orders {
-  font-size: 10px;
+.price-buy { color: var(--green); }   /* Giá MUA → xanh lá */
+.price-sell { color: var(--red); }     /* Giá BÁN → đỏ */
+
+.price-fiat {
+  font-size: 11px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
-.limit-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.limit-text { color: var(--text-muted); font-size: 11px; }
-.limit-avail { color: var(--text); font-weight: 700; }
-
-.payment-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.pay-tag {
-  padding: 2px 8px;
-  background: rgba(77,166,255,0.1);
-  border: 1px solid rgba(77,166,255,0.2);
-  border-radius: 2px;
-  color: var(--blue);
-  font-size: 10px;
-}
-
-/* Loading */
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(10,10,11,0.85);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.loading-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  color: var(--text-muted);
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-/* Toast */
-.toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  padding: 14px 20px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  font-weight: 700;
-  transform: translateY(100px);
-  opacity: 0;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  z-index: 9998;
-  border: 1px solid;
-  max-width: 360px;
-}
-
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { background: var(--green-dim); border-color: var(--green); color: var(--green); }
-.toast.error { background: var(--red-dim); border-color: var(--red); color: var(--red); }
-.toast.info { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-
-/* Error message */
-.error-msg {
-  padding: 40px;
-  text-align: center;
-  color: var(--red);
+/* ─── Cột Số lượng & Giới hạn ───────────────────────── */
+.quantity-cell span,
+.limit-cell span {
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 
-.error-msg strong { display: block; font-size: 16px; margin-bottom: 8px; }
+.limit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
-/* Pagination */
-.pagination-row {
+.limit-fiat {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ─── Cột Phương thức thanh toán ─────────────────────── */
+/* Badge nhỏ bo tròn — nền xanh nhạt */
+.payment-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--accent-blue);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ─── Cột Thời gian ─────────────────────────────────── */
+.time-cell {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ─── Nút Mua/Bán ───────────────────────────────────── */
+.btn-trade {
+  padding: 7px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-trade-buy {
+  background: var(--green);
+  color: #fff;
+}
+
+.btn-trade-buy:hover {
+  box-shadow: 0 3px 10px var(--green-glow);
+}
+
+.btn-trade-sell {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-trade-sell:hover {
+  box-shadow: 0 3px 10px var(--red-glow);
+}
+
+/* ─── Trạng thái trống (Empty state) ────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state svg { opacity: 0.3; }
+.empty-state p { font-size: 13px; }
+.empty-row td { border: none !important; }
+
+/* ═══ 9. PAGINATION ════════════════════════════════════ */
+
+.pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 16px;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 
-/* Animations */
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-@keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+.btn-page {
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
 
-.fade-in { animation: fadeIn 0.3s ease forwards; }
+.btn-page:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+.btn-page:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
 
-/* Responsive */
+.page-info {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ─── Loading overlay cho bảng ───────────────────────── */
+/* Khi đang tải: phủ lớp mờ + chữ "Đang tải..." lên bảng */
+.table-loading .table-wrapper {
+  position: relative;
+}
+
+.table-loading .table-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 23, 0.6);
+  backdrop-filter: blur(2px);
+  border-radius: var(--radius-sm);
+  z-index: 2;
+}
+
+.table-loading .table-wrapper::before {
+  content: 'Đang tải...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  z-index: 3;
+}
+
+/* ═══ 10. TOAST ════════════════════════════════════════
+   Thông báo popup — xuất hiện góc trên bên phải
+   Có 3 loại: success (xanh), error (đỏ), info (xanh dương)
+*/
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: translateX(120%);  /* Ẩn bên phải màn hình */
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+}
+
+/* Khi hiện: trượt vào từ bên phải */
+.toast.show {
+  transform: translateX(0);
+}
+
+.toast-icon {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Toast thành công — viền trái xanh lá */
+.toast-success { border-left: 3px solid var(--green); }
+.toast-success .toast-icon { color: var(--green); }
+
+/* Toast lỗi — viền trái đỏ */
+.toast-error { border-left: 3px solid var(--red); }
+.toast-error .toast-icon { color: var(--red); }
+
+/* Toast thông tin — viền trái xanh dương */
+.toast-info { border-left: 3px solid var(--accent-blue); }
+.toast-info .toast-icon { color: var(--accent-blue); }
+
+/* ═══ 11. RESPONSIVE ═══════════════════════════════════
+   Tương thích với màn hình nhỏ (mobile, tablet)
+*/
 @media (max-width: 768px) {
-  .config-grid { grid-template-columns: 1fr; }
-  .main { padding: 12px; }
-  .stats-bar { gap: 0; }
-  .auto-refresh { margin-left: 0; }
+  /* Form chuyển sang 1 cột */
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .host-select-row {
+    flex-direction: column;
+  }
+
+  /* Header xếp dọc */
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  /* Tabs wrap xuống dòng */
+  .tabs-header {
+    flex-wrap: wrap;
+  }
+
+  .tabs-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* Bảng nhỏ hơn */
+  table { font-size: 12px; }
+  thead th, tbody td { padding: 10px 10px; }
 }
