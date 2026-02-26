@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const MexcP2PService = require('../services/mexcP2P');
 const logger = require('../utils/logger');
+const config = require('../config');
 
 /**
  * Biến lưu service instance đang kết nối.
@@ -95,7 +96,7 @@ router.get('/market/ads', requireConnection, async (req, res) => {
     const result = await activeService.getMarketAds({
       side: side.toUpperCase(),
       fiatUnit: fiatUnit || 'VND',
-      coinId: coinId || '',
+      coinId: coinId || config.defaultCoinId,
       page: parseInt(page) || 1,
       amount: amount || '',
       payMethod: payMethod || '',
@@ -120,7 +121,7 @@ router.get('/my/ads', requireConnection, async (req, res) => {
 
     const result = await activeService.getMyAds({
       advStatus: advStatus || '',
-      coinId: coinId || '',
+      coinId: coinId || config.defaultCoinId,
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
     });

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { buildSignedQuery } = require('../utils/crypto');
 const logger = require('../utils/logger');
+const config = require('../config');
 
 /**
  * Service chính giao tiếp với MEXC P2P API.
@@ -55,15 +56,15 @@ class MexcP2PService {
     const params = {
       fiatUnit: options.fiatUnit || 'VND',
       side: options.side,                      // BUY hoặc SELL
-      coinId: options.coinId || '',
+      coinId: options.coinId || config.defaultCoinId,
       countryCode: options.countryCode || '',
       payMethod: options.payMethod || '',
       amount: options.amount || '',
       quantity: options.quantity || '',
       page: options.page || 1,
-      blockTrade: options.blockTrade || false,
-      allowTrade: options.allowTrade !== undefined ? options.allowTrade : '',
-      haveTrade: options.haveTrade !== undefined ? options.haveTrade : '',
+      // blockTrade: options.blockTrade || false,
+      // allowTrade: options.allowTrade !== undefined ? options.allowTrade : '',
+      // haveTrade: options.haveTrade !== undefined ? options.haveTrade : '',
       follow: options.follow !== undefined ? options.follow : '',
     };
 
@@ -90,7 +91,7 @@ class MexcP2PService {
    */
   async getMyAds(options = {}) {
     const params = {
-      coinId: options.coinId || '',
+      coinId: options.coinId || config.defaultCoinId,
       advStatus: options.advStatus || '',
       page: options.page || 1,
       limit: options.limit || 10,
@@ -136,7 +137,7 @@ class MexcP2PService {
    */
   async testConnection() {
     try {
-      const params = { fiatUnit: 'VND', page: 1 };
+      const params = { fiatUnit: 'VND', page: 1, coinId: config.defaultCoinId };
       const signedQuery = buildSignedQuery(params, this.secretKey);
       const response = await this.client.get(`/api/v3/fiat/market/ads/pagination?${signedQuery}`);
       return response.data.code === 0;

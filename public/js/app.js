@@ -114,8 +114,11 @@ const App = (() => {
 
     try {
       const result = await api.get(
-        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}`
+        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=USDT`
       );
+
+      // Log kết quả trả về từ API ra console (F12 → Console để xem)
+      console.log(`[${side}] API response:`, result);
 
       if (result.code === 0) {
         state[`${tabKey}Ads`] = result.data || [];

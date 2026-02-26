@@ -16,25 +16,35 @@ function generateSignature(queryString, secretKey) {
 
 /**
  * Xây dựng chuỗi query đã ký (signed query string).
- * Tự động thêm timestamp hiện tại, sắp xếp tham số theo alphabet,
- * loại bỏ tham số rỗng, rồi tạo chữ ký và gắn vào cuối query.
+ * Tự động thêm timestamp, loại bỏ tham số rỗng,
+ * ghép thành query string RAW (không encode) rồi ký bằng HMAC-SHA256.
+ *
+ * Logic khớp với Java demo của MEXC:
+ *   1. Ghép params thành chuỗi dạng "key=value&key=value" (giá trị RAW, không encode)
+ *   2. Ký chuỗi RAW đó bằng HMAC-SHA256
+ *   3. Gắn signature vào cuối query string
+ *
  * @param {Object} params - Các tham số request (vd: { fiatUnit: 'VND', page: 1 })
  * @param {string} secretKey - Secret Key từ tài khoản MEXC
- * @returns {string} Chuỗi query hoàn chỉnh có signature (vd: "fiatUnit=VND&timestamp=...&signature=...")
+ * @returns {string} Chuỗi query hoàn chỉnh có signature
  */
 function buildSignedQuery(params, secretKey) {
   const timestamp = Date.now();
   const queryParams = { ...params, timestamp };
 
-  // Sắp xếp tham số theo thứ tự alphabet rồi ghép thành query string
+  // Ghép params thành query string RAW (không encode), giống Java demo:
+  //   String queryString = "timestamp=" + timestamp;
   const queryString = Object.keys(queryParams)
-    .sort()
     .filter(key => queryParams[key] !== undefined && queryParams[key] !== '')
-    .map(key => `${key}=${encodeURIComponent(queryParams[key])}`)
+    .map(key => `${key}=${queryParams[key]}`)
     .join('&');
 
-  // Tạo chữ ký và gắn vào cuối
+  // Ký chuỗi raw bằng HMAC-SHA256, giống Java demo:
+  //   String signature = generateSignature(queryString, API_SECRET);
   const signature = generateSignature(queryString, secretKey);
+
+  // Trả về raw query + signature, giống Java demo:
+  //   "timestamp=" + timestamp + "&signature=" + signature
   return `${queryString}&signature=${signature}`;
 }
 

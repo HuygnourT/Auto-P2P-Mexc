@@ -15,6 +15,8 @@ const config = {
 
   // Tiền tệ fiat mặc định khi lấy ads market
   defaultFiatUnit: 'VND',
+
+  // coinId mặc định cho USDT trên MEXC
   defaultCoinId: 'USDT',
 
   // Giới hạn request tối đa mỗi giây (theo tài liệu MEXC API)
