@@ -1,19 +1,31 @@
 // server/services/p2p.service.js
 const axios = require('axios');
+const SignatureService = require('./signature.service');
 const API_CONFIG = require('../config/api.config');
 
 class P2PService {
-  constructor(gateway = 'mexc.com') {
+  constructor(apiKey, secretKey, gateway = 'mexc.com') {
+    this.apiKey = apiKey;
+    this.secretKey = secretKey;
     this.baseUrl = API_CONFIG.endpoints[gateway] || API_CONFIG.endpoints['mexc.com'];
   }
 
   /**
+   * Get common headers for authenticated requests
+   */
+  getHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'X-MEXC-APIKEY': this.apiKey
+    };
+  }
+
+  /**
    * Fetch paginated market ads (Buy or Sell)
-   * Public endpoint - no authentication required
    * @param {Object} options
-   * @param {string} options.side       - 'BUY' | 'SELL'
-   * @param {string} options.fiatUnit   - e.g. 'VND'
-   * @param {string} options.coinId     - e.g. 'USDT'
+   * @param {string} options.side - 'BUY' | 'SELL'
+   * @param {string} options.fiatUnit - e.g., 'VND'
+   * @param {string} options.coinId - e.g., 'USDT'
    * @param {number} options.page
    * @param {number} options.amount
    * @param {number} options.quantity
@@ -32,26 +44,30 @@ class P2PService {
       payMethod
     } = options;
 
-    const params = new URLSearchParams({ fiatUnit, coinId, page });
+    const params = {
+      fiatUnit,
+      coinId,
+      page
+    };
 
-    if (side)        params.set('side', side);
-    if (amount)      params.set('amount', amount);
-    if (quantity)    params.set('quantity', quantity);
-    if (countryCode) params.set('countryCode', countryCode);
-    if (payMethod)   params.set('payMethod', payMethod);
+    if (side) params.side = side;
+    if (amount) params.amount = amount;
+    if (quantity) params.quantity = quantity;
+    if (countryCode) params.countryCode = countryCode;
+    if (payMethod) params.payMethod = payMethod;
 
-    const url = `${this.baseUrl}${API_CONFIG.p2p.marketAds}?${params.toString()}`;
+    const { queryString, signature, timestamp } = SignatureService.generateSignature(params, this.secretKey);
+    
+    const url = `${this.baseUrl}${API_CONFIG.p2p.marketAds}?${queryString}&signature=${signature}`;
 
     try {
       const response = await axios.get(url, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         timeout: 10000
       });
 
       if (response.data.code !== 0) {
-        throw new Error(
-          `MEXC API Error: ${response.data.msg || 'Unknown error'} (code: ${response.data.code})`
-        );
+        throw new Error(`MEXC API Error: ${response.data.msg || 'Unknown error'} (code: ${response.data.code})`);
       }
 
       return response.data;
@@ -73,7 +89,7 @@ class P2PService {
     ]);
 
     return {
-      buy:  buyAds.status  === 'fulfilled' ? buyAds.value  : { error: buyAds.reason.message },
+      buy: buyAds.status === 'fulfilled' ? buyAds.value : { error: buyAds.reason.message },
       sell: sellAds.status === 'fulfilled' ? sellAds.value : { error: sellAds.reason.message }
     };
   }

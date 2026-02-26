@@ -8,6 +8,8 @@ const state = {
   coinId: 'USDT',
   side: '',
   page: 1,
+  amount: '',
+  quantity: '',
   autoRefreshSecs: 0,
   autoRefreshTimer: null,
   lastData: null,
@@ -27,7 +29,7 @@ function fmtCoin(n) {
   if (n == null) return '—';
   const v = parseFloat(n);
   if (v >= 1000) return fmt(v, 2);
-  if (v >= 1)    return fmt(v, 4);
+  if (v >= 1) return fmt(v, 4);
   return fmt(v, 6);
 }
 
@@ -49,6 +51,12 @@ function setStatus(status, text) {
   badge.className = `status-badge ${status}`;
   label.textContent = text;
 }
+
+function toggleVisibility(inputId) {
+  const input = document.getElementById(inputId);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+window.toggleVisibility = toggleVisibility;
 
 // ─── Toggle Groups ───────────────────────────────────────
 function initToggleGroup(groupId, onChange) {
@@ -125,6 +133,14 @@ document.getElementById('nextPage').addEventListener('click', () => {
 
 // ─── API Call ────────────────────────────────────────────
 async function fetchData() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const secretKey = document.getElementById('secretKey').value.trim();
+
+  if (!apiKey || !secretKey) {
+    showToast('Vui lòng nhập API Key và Secret Key!', 'error');
+    return;
+  }
+
   if (state.loading) return;
   state.loading = true;
 
@@ -134,23 +150,31 @@ async function fetchData() {
 
   try {
     const params = new URLSearchParams({
-      gateway:  state.gateway,
+      gateway: state.gateway,
       fiatUnit: state.fiatUnit,
-      coinId:   state.coinId,
-      page:     state.page
+      coinId: state.coinId,
+      page: state.page
     });
 
     if (state.side) params.set('side', state.side);
 
-    const amountVal   = document.getElementById('amountFilter').value;
+    const amountVal = document.getElementById('amountFilter').value;
     const quantityVal = document.getElementById('quantityFilter').value;
-    if (amountVal)   params.set('amount', amountVal);
+    if (amountVal) params.set('amount', amountVal);
     if (quantityVal) params.set('quantity', quantityVal);
 
-    const response = await fetch(`/api/p2p/ads?${params.toString()}`);
+    const response = await fetch(`/api/p2p/ads?${params.toString()}`, {
+      headers: {
+        'x-api-key': apiKey,
+        'x-secret-key': secretKey
+      }
+    });
+
     const json = await response.json();
 
-    if (!json.success) throw new Error(json.error || 'Lỗi không xác định');
+    if (!json.success) {
+      throw new Error(json.error || 'Lỗi không xác định');
+    }
 
     state.lastData = json;
     renderResults(json);
@@ -171,43 +195,44 @@ async function fetchData() {
 
 // ─── Render ──────────────────────────────────────────────
 function renderResults(json) {
-  const area     = document.getElementById('resultsArea');
+  const area = document.getElementById('resultsArea');
   const statsBar = document.getElementById('statsBar');
   statsBar.style.display = 'flex';
 
-  const isBothSides = json.data?.buy !== undefined && json.data?.sell !== undefined;
+  const isBothSides = json.data && json.data.buy !== undefined && json.data.sell !== undefined;
 
   if (isBothSides) {
-    const buyList  = extractAds(json.data.buy);
+    const buyList = extractAds(json.data.buy);
     const sellList = extractAds(json.data.sell);
 
-    document.getElementById('statBuy').textContent      = buyList.length;
-    document.getElementById('statSell').textContent     = sellList.length;
-    document.getElementById('statBestBuy').textContent  = buyList.length  ? fmt(buyList[0].price)  : '—';
+    // Stats
+    document.getElementById('statBuy').textContent = buyList.length;
+    document.getElementById('statSell').textContent = sellList.length;
+    document.getElementById('statBestBuy').textContent = buyList.length ? fmt(buyList[0].price) : '—';
     document.getElementById('statBestSell').textContent = sellList.length ? fmt(sellList[0].price) : '—';
-    document.getElementById('statTime').textContent     = timeStr();
+    document.getElementById('statTime').textContent = timeStr();
 
     area.innerHTML = `
       <div class="tabs-header">
-        <button class="tab-btn active buy"  data-tab="buy"  onclick="switchTab('buy')">
+        <button class="tab-btn active buy" data-tab="buy" onclick="switchTab('buy')">
           MUA <span class="tab-count">${buyList.length}</span>
         </button>
         <button class="tab-btn sell" data-tab="sell" onclick="switchTab('sell')">
           BÁN <span class="tab-count">${sellList.length}</span>
         </button>
       </div>
-      <div id="tab-buy"  class="ads-content fade-in">${renderTable(buyList,  'BUY',  json.filters?.fiatUnit, json.filters?.coinId)}</div>
+      <div id="tab-buy" class="ads-content fade-in">${renderTable(buyList, 'BUY', json.filters?.fiatUnit, json.filters?.coinId)}</div>
       <div id="tab-sell" class="ads-content fade-in" style="display:none">${renderTable(sellList, 'SELL', json.filters?.fiatUnit, json.filters?.coinId)}</div>
     `;
   } else {
-    const ads  = extractAds(json.data);
+    // Single side
+    const ads = extractAds(json.data);
     const side = json.data?.side || '';
-
-    document.getElementById('statBuy').textContent      = side === 'BUY'  ? ads.length : '—';
-    document.getElementById('statSell').textContent     = side === 'SELL' ? ads.length : '—';
-    document.getElementById('statBestBuy').textContent  = (side === 'BUY'  && ads.length) ? fmt(ads[0].price) : '—';
+    document.getElementById('statBuy').textContent = side === 'BUY' ? ads.length : '—';
+    document.getElementById('statSell').textContent = side === 'SELL' ? ads.length : '—';
+    document.getElementById('statBestBuy').textContent = (side === 'BUY' && ads.length) ? fmt(ads[0].price) : '—';
     document.getElementById('statBestSell').textContent = (side === 'SELL' && ads.length) ? fmt(ads[0].price) : '—';
-    document.getElementById('statTime').textContent     = timeStr();
+    document.getElementById('statTime').textContent = timeStr();
 
     area.innerHTML = `
       <div class="ads-content fade-in">
@@ -221,13 +246,15 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
-  document.getElementById('tab-buy').style.display  = tab === 'buy'  ? 'block' : 'none';
+  document.getElementById('tab-buy').style.display = tab === 'buy' ? 'block' : 'none';
   document.getElementById('tab-sell').style.display = tab === 'sell' ? 'block' : 'none';
 }
 window.switchTab = switchTab;
 
 function extractAds(data) {
-  if (!data || data.error) return [];
+  if (!data) return [];
+  if (data.error) return [];
+  // Try common response shapes
   return data.data?.list || data.data || data.list || data.rows || [];
 }
 
@@ -237,17 +264,15 @@ function renderTable(ads, side, fiatUnit = 'VND', coinId = 'USDT') {
   }
 
   const rows = ads.map((ad, i) => {
-    const price        = ad.price || ad.adPrice || ad.tradePrice || '—';
-    const available    = ad.surplusAmount || ad.availableAmount || ad.quantity || '—';
-    const minAmt       = ad.minTradeAmount || ad.minAmount || '—';
-    const maxAmt       = ad.maxTradeAmount || ad.maxAmount || '—';
+    const price = ad.price || ad.adPrice || ad.tradePrice || '—';
+    const available = ad.surplusAmount || ad.availableAmount || ad.quantity || '—';
+    const minAmt = ad.minTradeAmount || ad.minAmount || '—';
+    const maxAmt = ad.maxTradeAmount || ad.maxAmount || '—';
     const merchantName = ad.nickName || ad.merchantName || ad.username || 'Ẩn danh';
-    const completedOrders = ad.finishRate != null
-      ? `${(ad.finishRate * 100).toFixed(1)}%`
-      : (ad.completedOrderNum != null ? `${ad.completedOrderNum} lệnh` : '—');
+    const completedOrders = ad.finishRate != null ? `${(ad.finishRate * 100).toFixed(1)}%` : (ad.completedOrderNum != null ? `${ad.completedOrderNum} lệnh` : '—');
     const payMethods = Array.isArray(ad.payMethodList)
       ? ad.payMethodList.map(p => `<span class="pay-tag">${p.payMethodName || p.name || p}</span>`).join('')
-      : '—';
+      : (ad.payMethodList || '—');
 
     const sideClass = (ad.tradeType === 'BUY' || side === 'BUY') ? 'buy' : 'sell';
 
@@ -268,7 +293,7 @@ function renderTable(ads, side, fiatUnit = 'VND', coinId = 'USDT') {
           </div>
         </td>
         <td><div class="payment-tags">${payMethods}</div></td>
-        <td><span class="badge badge-${sideClass}">${ad.tradeType || side}</span></td>
+        <td><span class="badge badge-${sideClass}">${(ad.tradeType || side)}</span></td>
       </tr>
     `;
   }).join('');
@@ -293,7 +318,8 @@ function renderTable(ads, side, fiatUnit = 'VND', coinId = 'USDT') {
 }
 
 function renderError(msg) {
-  document.getElementById('resultsArea').innerHTML = `
+  const area = document.getElementById('resultsArea');
+  area.innerHTML = `
     <div class="error-msg">
       <strong>⚠ Lỗi tải dữ liệu</strong>
       ${msg}
@@ -308,9 +334,12 @@ document.getElementById('fetchBtn').addEventListener('click', () => {
   fetchData();
 });
 
-document.getElementById('refreshBtn').addEventListener('click', fetchData);
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  fetchData();
+});
 
-['amountFilter', 'quantityFilter'].forEach(id => {
+// Allow Enter to trigger fetch from input fields
+['apiKey', 'secretKey', 'amountFilter', 'quantityFilter'].forEach(id => {
   document.getElementById(id)?.addEventListener('keydown', e => {
     if (e.key === 'Enter') fetchData();
   });
@@ -318,4 +347,4 @@ document.getElementById('refreshBtn').addEventListener('click', fetchData);
 
 // ─── Init ────────────────────────────────────────────────
 updatePageDisplay();
-console.log('%c MEXC P2P Tool v1.1.0 ', 'background:#f0c040;color:#000;font-weight:bold;padding:4px 12px;border-radius:3px;');
+console.log('%c MEXC P2P Tool v1.0.0 ', 'background:#f0c040;color:#000;font-weight:bold;padding:4px 12px;border-radius:3px;');

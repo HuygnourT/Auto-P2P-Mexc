@@ -29,12 +29,10 @@
   </header>
 
   <main class="main">
-
     <!-- Config Panel -->
     <section class="panel config-panel">
       <div class="panel-label">01 / CẤU HÌNH</div>
       <div class="config-grid">
-
         <!-- Gateway -->
         <div class="field-group">
           <label class="field-label">Gateway</label>
@@ -44,6 +42,30 @@
           </div>
         </div>
 
+        <!-- API Key -->
+        <div class="field-group">
+          <label class="field-label">API Key</label>
+          <div class="input-wrapper">
+            <input type="password" id="apiKey" class="input-field" placeholder="Nhập MEXC API Key..." autocomplete="off" />
+            <button class="toggle-visibility" onclick="toggleVisibility('apiKey')">👁</button>
+          </div>
+        </div>
+
+        <!-- Secret Key -->
+        <div class="field-group">
+          <label class="field-label">Secret Key</label>
+          <div class="input-wrapper">
+            <input type="password" id="secretKey" class="input-field" placeholder="Nhập MEXC Secret Key..." autocomplete="off" />
+            <button class="toggle-visibility" onclick="toggleVisibility('secretKey')">👁</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filter Panel -->
+    <section class="panel filter-panel">
+      <div class="panel-label">02 / BỘ LỌC</div>
+      <div class="filter-grid">
         <!-- Fiat Currency -->
         <div class="field-group">
           <label class="field-label">Tiền tệ Fiat</label>
@@ -53,7 +75,7 @@
             <button class="toggle-btn" data-value="EUR">EUR</button>
             <button class="toggle-btn" data-value="custom">Khác</button>
           </div>
-          <input type="text" id="customFiat" class="input-field" placeholder="Nhập mã tiền tệ..." style="display:none; margin-top:8px;" />
+          <input type="text" id="customFiat" class="input-field" placeholder="Nhập mã tiền tệ..." style="display:none; margin-top: 8px;" />
         </div>
 
         <!-- Coin -->
@@ -65,23 +87,15 @@
             <button class="toggle-btn" data-value="ETH">ETH</button>
             <button class="toggle-btn" data-value="custom">Khác</button>
           </div>
-          <input type="text" id="customCoin" class="input-field" placeholder="Nhập mã coin..." style="display:none; margin-top:8px;" />
+          <input type="text" id="customCoin" class="input-field" placeholder="Nhập mã coin..." style="display:none; margin-top: 8px;" />
         </div>
-
-      </div>
-    </section>
-
-    <!-- Filter Panel -->
-    <section class="panel filter-panel">
-      <div class="panel-label">02 / BỘ LỌC</div>
-      <div class="filter-grid">
 
         <!-- Side -->
         <div class="field-group">
           <label class="field-label">Loại lệnh</label>
           <div class="toggle-group" id="sideToggle">
             <button class="toggle-btn active" data-value="">Tất cả</button>
-            <button class="toggle-btn buy"  data-value="BUY">MUA</button>
+            <button class="toggle-btn buy" data-value="BUY">MUA</button>
             <button class="toggle-btn sell" data-value="SELL">BÁN</button>
           </div>
         </div>
@@ -107,7 +121,6 @@
             <button class="page-btn" id="nextPage">›</button>
           </div>
         </div>
-
       </div>
 
       <div class="action-row">
@@ -163,10 +176,9 @@
     <section class="results-area" id="resultsArea">
       <div class="empty-state">
         <div class="empty-icon">⬡</div>
-        <p>Chọn cấu hình và nhấn <strong>TẢI DỮ LIỆU</strong> để xem danh sách P2P</p>
+        <p>Nhập API Key và nhấn <strong>TẢI DỮ LIỆU</strong> để xem danh sách P2P</p>
       </div>
     </section>
-
   </main>
 
   <!-- Loading overlay -->
