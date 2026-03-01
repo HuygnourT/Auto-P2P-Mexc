@@ -19,6 +19,12 @@ const App = (() => {
     buyPage: { current: 1, total: 1 },   // Phân trang tab BUY
     sellPage: { current: 1, total: 1 },  // Phân trang tab SELL
     fiatUnit: 'VND',           // Loại tiền fiat đang lọc
+
+    // ── My Ads state ──
+    myAds: [],                 // Danh sách tất cả ads của bản thân (OPEN + CLOSE)
+    myAdsFiltered: [],         // Danh sách đã lọc theo filter hiện tại
+    myAdsFilter: 'ALL',        // Bộ lọc hiện tại: 'ALL', 'OPEN', 'CLOSE'
+    myAdsPage: { current: 1, total: 1 },  // Phân trang my ads
   };
 
   // ─── API Client: Gửi request đến backend ─────────────
@@ -46,7 +52,7 @@ const App = (() => {
    * Kết nối đến MEXC API.
    * Lấy apiKey, secretKey, apiHost từ form input,
    * gửi POST /api/connect để backend tạo service instance.
-   * Nếu thành công, tự động load ads BUY và SELL.
+   * Nếu thành công, tự động load My Ads + Market Ads.
    */
   async function connect() {
     const apiKey = document.getElementById('apiKey').value.trim();
@@ -66,7 +72,8 @@ const App = (() => {
         state.connected = true;
         updateConnectionUI(true, apiHost);
         showToast('Kết nối thành công!', 'success');
-        // Tự động tải danh sách ads sau khi kết nối
+        // Tự động tải tất cả dữ liệu sau khi kết nối
+        await loadMyAds();
         await loadMarketAds('BUY');
         await loadMarketAds('SELL');
       } else {
@@ -81,20 +88,217 @@ const App = (() => {
 
   /**
    * Ngắt kết nối API.
-   * Gọi POST /api/disconnect, xóa dữ liệu ads, cập nhật giao diện.
+   * Gọi POST /api/disconnect, xóa toàn bộ dữ liệu, cập nhật giao diện.
    */
   async function disconnect() {
     await api.post('/api/disconnect');
     state.connected = false;
     state.buyAds = [];
     state.sellAds = [];
+    state.myAds = [];
+    state.myAdsFiltered = [];
     updateConnectionUI(false);
     renderAdsTable('buy');
     renderAdsTable('sell');
+    renderMyAdsTable();
     showToast('Đã ngắt kết nối', 'info');
   }
 
-  // ─── Lấy dữ liệu Market Ads ─────────────────────────
+  // ═══════════════════════════════════════════════════════
+  // MY ADS — Quảng cáo của tôi
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Lấy tất cả quảng cáo của bản thân từ API.
+   * Gọi 2 lần: 1 lần lấy ads OPEN, 1 lần lấy ads CLOSE.
+   * Gộp kết quả lại để hiển thị đầy đủ cả 2 trạng thái.
+   * @param {number} page - Số trang (mặc định 1)
+   */
+  async function loadMyAds(page = 1) {
+    if (!state.connected) return;
+
+    setMyAdsLoading(true);
+
+    try {
+      // Gọi API lấy ads với advStatus=OPEN,CLOSE (tất cả trạng thái)
+      const result = await api.get(
+        `/api/my/ads?merchantId=27939138&=`
+      );
+
+      console.log('[My Ads] API response:', result);
+
+      if (result.code === 0) {
+        state.myAds = result.data || [];
+        state.myAdsPage = {
+          current: result.page?.currPage || 1,
+          total: result.page?.totalPage || 1,
+        };
+        // Áp dụng filter hiện tại
+        applyMyAdsFilter();
+      } else {
+        showToast(`Lỗi lấy ads cá nhân: ${result.msg}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Lỗi: ${err.message}`, 'error');
+    } finally {
+      setMyAdsLoading(false);
+    }
+  }
+
+  /**
+   * Lọc danh sách My Ads theo trạng thái (ALL / OPEN / CLOSE).
+   * Cập nhật state.myAdsFiltered rồi render lại bảng.
+   * @param {string} filter - 'ALL', 'OPEN', hoặc 'CLOSE'
+   */
+  function filterMyAds(filter) {
+    state.myAdsFilter = filter;
+
+    // Cập nhật UI filter chips
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.filter === filter);
+    });
+
+    applyMyAdsFilter();
+  }
+
+  /**
+   * Áp dụng bộ lọc hiện tại lên danh sách My Ads.
+   * Lọc từ state.myAds → state.myAdsFiltered, rồi render bảng.
+   */
+  function applyMyAdsFilter() {
+    if (state.myAdsFilter === 'ALL') {
+      state.myAdsFiltered = [...state.myAds];
+    } else {
+      // So sánh advStatus (có thể là "open", "OPEN", "close", "CLOSE")
+      state.myAdsFiltered = state.myAds.filter(ad => {
+        const status = (ad.advStatus || '').toUpperCase();
+        return status === state.myAdsFilter;
+      });
+    }
+    renderMyAdsTable();
+  }
+
+  /**
+   * Render bảng quảng cáo cá nhân (My Ads).
+   * Hiển thị: mã QC, loại (BUY/SELL), trạng thái, coin, giá,
+   * số lượng khả dụng/tổng, giới hạn, fiat, thanh toán, ngày tạo.
+   */
+  function renderMyAdsTable() {
+    const ads = state.myAdsFiltered;
+    const container = document.getElementById('myAdsTableBody');
+    if (!container) return;
+
+    // Cập nhật counter trên filter chips
+    updateMyAdsCounters();
+
+    if (!ads || ads.length === 0) {
+      container.innerHTML = `
+        <tr class="empty-row">
+          <td colspan="10">
+            <div class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <p>${state.connected ? 'Không có quảng cáo nào' : 'Kết nối để xem quảng cáo của bạn'}</p>
+            </div>
+          </td>
+        </tr>`;
+      return;
+    }
+
+    container.innerHTML = ads.map((ad, i) => {
+      const isOpen = (ad.advStatus || '').toUpperCase() === 'OPEN';
+      const isBuy = (ad.side || '').toUpperCase() === 'BUY';
+      const createdDate = ad.createTime ? formatDate(ad.createTime) : '—';
+
+      // Tính số lượng: quantity = initAmount / price
+      const quantity = ad.quantity || (ad.initAmount && ad.price ? (ad.initAmount / ad.price).toFixed(4) : '—');
+
+      // Lấy tên payment methods từ paymentInfo array
+      const paymentNames = (ad.paymentInfo || [])
+        .map(p => p.bankName || getPayMethodName(String(p.payMethod)))
+        .join(', ') || getPayMethodName(ad.payMethod);
+
+      return `
+        <tr class="ad-row my-ad-row ${isOpen ? '' : 'ad-closed'}" style="animation-delay: ${i * 0.04}s">
+          <td class="mono-cell" title="${ad.advNo || ad.davNo || ''}">
+            ${truncateId(ad.advNo || ad.davNo || '—')}
+          </td>
+          <td>
+            <span class="side-badge ${isBuy ? 'side-buy' : 'side-sell'}">
+              ${isBuy ? 'MUA' : 'BÁN'}
+            </span>
+          </td>
+          <td>
+            <span class="status-badge ${isOpen ? 'status-open' : 'status-closed'}">
+              <span class="status-indicator"></span>
+              ${isOpen ? 'Đang mở' : 'Đã đóng'}
+            </span>
+          </td>
+          <td>${ad.coinName || 'USDT'}</td>
+          <td class="mono-cell price-value ${isBuy ? 'price-buy' : 'price-sell'}">
+            ${formatNumber(ad.price)}
+          </td>
+          <td class="mono-cell">
+            <span class="${isOpen ? '' : 'text-muted'}">${formatNumber(ad.availableQuantity)}</span>
+            <span class="text-muted"> / ${formatNumber(quantity)}</span>
+          </td>
+          <td class="mono-cell">
+            ${formatNumber(ad.minSingleTransAmount)} - ${formatNumber(ad.maxSingleTransAmount)}
+          </td>
+          <td>${ad.fiatUnit || '—'}</td>
+          <td>
+            <span class="payment-badge">${paymentNames || 'N/A'}</span>
+          </td>
+          <td class="mono-cell text-muted">${createdDate}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  /**
+   * Cập nhật số lượng ads trên mỗi filter chip.
+   * Ví dụ: "Tất cả (5)", "Đang mở (3)", "Đã đóng (2)"
+   */
+  function updateMyAdsCounters() {
+    const all = state.myAds.length;
+    const open = state.myAds.filter(a => (a.advStatus || '').toUpperCase() === 'OPEN').length;
+    const closed = state.myAds.filter(a => (a.advStatus || '').toUpperCase() === 'CLOSE').length;
+
+    const chips = document.querySelectorAll('.filter-chip');
+    chips.forEach(chip => {
+      const filter = chip.dataset.filter;
+      const count = filter === 'ALL' ? all : filter === 'OPEN' ? open : closed;
+      // Chỉ thêm counter nếu đã kết nối và có data
+      if (state.connected && all > 0) {
+        const label = chip.textContent.replace(/\s*\(\d+\)/, '').trim();
+        chip.textContent = `${label} (${count})`;
+      }
+    });
+  }
+
+  /**
+   * Bật/tắt loading overlay cho bảng My Ads.
+   * @param {boolean} loading - true = đang tải
+   */
+  function setMyAdsLoading(loading) {
+    const wrapper = document.getElementById('myAdsTableWrapper');
+    if (!wrapper) return;
+    wrapper.classList.toggle('my-ads-loading', loading);
+  }
+
+  /**
+   * Chuyển trang cho My Ads.
+   * @param {number} direction - +1 (trang sau) hoặc -1 (trang trước)
+   */
+  async function changeMyAdsPage(direction) {
+    const newPage = state.myAdsPage.current + direction;
+    if (newPage < 1 || newPage > state.myAdsPage.total) return;
+    await loadMyAds(newPage);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // MARKET ADS — Quảng cáo trên thị trường
+  // ═══════════════════════════════════════════════════════
 
   /**
    * Lấy danh sách quảng cáo từ market theo side (BUY/SELL).
@@ -117,7 +321,6 @@ const App = (() => {
         `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=USDT`
       );
 
-      // Log kết quả trả về từ API ra console (F12 → Console để xem)
       console.log(`[${side}] API response:`, result);
 
       if (result.code === 0) {
@@ -161,12 +364,10 @@ const App = (() => {
     await loadMarketAds(side, newPage);
   }
 
-  // ─── Render giao diện ────────────────────────────────
+  // ─── Render giao diện Market Ads ─────────────────────
 
   /**
    * Render bảng danh sách ads (BUY hoặc SELL) vào HTML.
-   * Nếu không có ads, hiển thị empty state.
-   * Mỗi row hiển thị: tên merchant, giá, số lượng, giới hạn, phương thức thanh toán.
    * @param {string} tabKey - 'buy' hoặc 'sell'
    */
   function renderAdsTable(tabKey) {
@@ -192,7 +393,6 @@ const App = (() => {
       return;
     }
 
-    // Render từng row ads với thông tin merchant, giá, số lượng, ...
     container.innerHTML = ads.map((ad, i) => {
       const merchant = ad.merchant || {};
       const stats = ad.merchantStatistics || {};
@@ -263,7 +463,6 @@ const App = (() => {
 
   /**
    * Chuyển đổi tab BUY / SELL.
-   * Cập nhật class active cho button tab và panel tương ứng.
    * @param {string} tab - 'buy' hoặc 'sell'
    */
   function switchTab(tab) {
@@ -278,8 +477,6 @@ const App = (() => {
 
   /**
    * Cập nhật giao diện khi trạng thái kết nối thay đổi.
-   * Connected: hiện nút Ngắt kết nối, khóa input, đổi status dot sang xanh.
-   * Disconnected: hiện nút Kết nối, mở khóa input, status dot xám.
    * @param {boolean} connected - Trạng thái kết nối
    * @param {string} host - Tên host đang kết nối
    */
@@ -329,11 +526,7 @@ const App = (() => {
     }, 3500);
   }
 
-  /**
-   * Bật/tắt trạng thái loading cho button (disabled + spinner animation).
-   * @param {boolean} loading - true = đang tải, false = xong
-   * @param {string} btnId - ID của button element
-   */
+  /** Bật/tắt loading cho button */
   function setLoading(loading, btnId) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -341,11 +534,7 @@ const App = (() => {
     btn.classList.toggle('loading', loading);
   }
 
-  /**
-   * Bật/tắt overlay loading cho bảng ads (mờ bảng + text "Đang tải...").
-   * @param {string} tabKey - 'buy' hoặc 'sell'
-   * @param {boolean} loading - true = đang tải
-   */
+  /** Bật/tắt loading overlay cho bảng market ads */
   function setTableLoading(tabKey, loading) {
     const panel = document.getElementById(`${tabKey}Panel`);
     if (!panel) return;
@@ -353,8 +542,7 @@ const App = (() => {
   }
 
   /**
-   * Format số thành chuỗi có dấu phân cách hàng nghìn (kiểu Việt Nam).
-   * Ví dụ: 25000 → "25.000", 1.2345 → "1,2345"
+   * Format số theo kiểu Việt Nam (dấu chấm phân cách hàng nghìn).
    * @param {number|string} num - Số cần format
    * @returns {string} Chuỗi đã format
    */
@@ -366,11 +554,32 @@ const App = (() => {
   }
 
   /**
-   * Escape HTML để tránh XSS khi hiển thị dữ liệu từ API.
-   * Chuyển ký tự đặc biệt (<, >, &, ", ') thành HTML entities.
-   * @param {string} str - Chuỗi cần escape
-   * @returns {string} Chuỗi an toàn cho innerHTML
+   * Format timestamp (milliseconds) thành chuỗi ngày giờ.
+   * @param {number} ts - Timestamp dạng milliseconds
+   * @returns {string} Chuỗi "DD/MM/YY HH:mm"
    */
+  function formatDate(ts) {
+    const d = new Date(ts);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(2);
+    const hour = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hour}:${min}`;
+  }
+
+  /**
+   * Rút gọn mã ID dài (advNo) để hiển thị gọn trong bảng.
+   * Ví dụ: "a1375750128856004608" → "a137...4608"
+   * @param {string} id - Mã cần rút gọn
+   * @returns {string} Mã đã rút gọn
+   */
+  function truncateId(id) {
+    if (!id || id.length <= 12) return id;
+    return id.slice(0, 4) + '...' + id.slice(-4);
+  }
+
+  /** Escape HTML để tránh XSS */
   function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -378,10 +587,8 @@ const App = (() => {
   }
 
   /**
-   * Chuyển mã phương thức thanh toán (số) thành tên hiển thị.
-   * Ví dụ: "1" → "Ngân hàng", "2" → "Momo"
-   * Nếu không nhận diện được, hiển thị "PM-{mã}".
-   * @param {string} methodStr - Chuỗi mã payment (có thể chứa nhiều mã phân tách bởi dấu phẩy)
+   * Chuyển mã payment method thành tên hiển thị.
+   * @param {string} methodStr - Chuỗi mã (có thể nhiều mã phân tách bởi dấu phẩy)
    * @returns {string} Tên phương thức thanh toán
    */
   function getPayMethodName(methodStr) {
@@ -396,19 +603,12 @@ const App = (() => {
     return methodStr.split(',').map(m => methods[m.trim()] || `PM-${m.trim()}`).join(', ');
   }
 
-  /**
-   * Xem chi tiết quảng cáo (placeholder cho chức năng tương lai).
-   * Hiện tại chỉ hiện toast với mã advNo.
-   * @param {string} advNo - Mã quảng cáo
-   */
+  /** Xem chi tiết quảng cáo (placeholder) */
   function viewAd(advNo) {
     showToast(`Chi tiết quảng cáo: ${advNo}`, 'info');
   }
 
-  /**
-   * Toggle hiển thị/ẩn Secret Key input (password ↔ text).
-   * @param {string} inputId - ID của input element
-   */
+  /** Toggle hiện/ẩn Secret Key input */
   function togglePasswordVisibility(inputId) {
     const input = document.getElementById(inputId);
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -418,21 +618,18 @@ const App = (() => {
 
   /**
    * Hàm khởi tạo chạy khi DOM loaded.
-   * 1. Kiểm tra trạng thái kết nối từ backend (nếu đã kết nối trước đó).
-   * 2. Tải cấu hình (danh sách API host) từ backend để render dropdown.
-   * 3. Nếu đã kết nối, tự động load ads BUY và SELL.
+   * Kiểm tra trạng thái kết nối, tải config, auto-load data nếu đã kết nối.
    */
   async function init() {
-    // Kiểm tra trạng thái kết nối hiện tại
     const status = await api.get('/api/status');
     if (status.data?.connected) {
       state.connected = true;
       updateConnectionUI(true, '');
+      await loadMyAds();
       await loadMarketAds('BUY');
       await loadMarketAds('SELL');
     }
 
-    // Tải danh sách API host từ backend config
     const config = await api.get('/api/config');
     if (config.data?.apiHosts) {
       const select = document.getElementById('apiHost');
@@ -442,19 +639,21 @@ const App = (() => {
     }
   }
 
-  // ─── Public API: Các hàm được gọi từ HTML onclick ────
+  // ─── Public API ──────────────────────────────────────
   return {
-    init,                        // Khởi tạo ứng dụng
-    connect,                     // Kết nối API
-    disconnect,                  // Ngắt kết nối
-    switchTab,                   // Chuyển tab BUY/SELL
-    refreshAds,                  // Làm mới dữ liệu ads
-    changePage,                  // Chuyển trang
-    loadMarketAds,               // Tải ads từ market
-    viewAd,                      // Xem chi tiết ads
-    togglePasswordVisibility,    // Hiện/ẩn Secret Key
+    init,
+    connect,
+    disconnect,
+    switchTab,
+    refreshAds,
+    changePage,
+    loadMarketAds,
+    loadMyAds,                   // Tải ads cá nhân
+    filterMyAds,                 // Lọc ads cá nhân theo trạng thái
+    changeMyAdsPage,             // Chuyển trang ads cá nhân
+    viewAd,
+    togglePasswordVisibility,
   };
 })();
 
-// Chạy init() khi trang web load xong
 document.addEventListener('DOMContentLoaded', App.init);

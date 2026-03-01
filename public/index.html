@@ -14,7 +14,6 @@
          HEADER — Logo + Trạng thái kết nối
          ═══════════════════════════════════════════════════ -->
     <header class="app-header">
-      <!-- Bên trái: Logo + tên app -->
       <div class="logo-section">
         <div class="logo-icon">P2P</div>
         <div class="logo-text">
@@ -22,8 +21,6 @@
           <span>v1.0 · Automated Trading</span>
         </div>
       </div>
-
-      <!-- Bên phải: Chấm trạng thái + text -->
       <div class="connection-status">
         <span class="status-dot" id="statusDot"></span>
         <span id="statusText">Chưa kết nối</span>
@@ -32,10 +29,7 @@
 
     <!-- ═══════════════════════════════════════════════════
          CARD: THÔNG TIN KẾT NỐI API
-         ═══════════════════════════════════════════════════
-         Người dùng nhập API Key, Secret Key và chọn API Host.
-         Sau khi kết nối, các ô input sẽ bị khóa (class .locked).
-    -->
+         ═══════════════════════════════════════════════════ -->
     <div class="card">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -44,10 +38,8 @@
         Thông tin kết nối API
       </div>
 
-      <!-- Khu vực input — sẽ bị khóa khi đã kết nối -->
       <div id="credentialInputs">
         <div class="form-grid">
-          <!-- Ô nhập API Key -->
           <div class="form-group">
             <label>API KEY</label>
             <div class="input-wrapper">
@@ -56,15 +48,12 @@
                      autocomplete="off" spellcheck="false">
             </div>
           </div>
-
-          <!-- Ô nhập Secret Key (có nút ẩn/hiện) -->
           <div class="form-group">
             <label>SECRET KEY</label>
             <div class="input-wrapper">
               <input type="password" id="secretKey"
                      placeholder="Nhập Secret Key..."
                      autocomplete="off" spellcheck="false">
-              <!-- Nút mắt: click để toggle hiện/ẩn mật khẩu -->
               <button class="input-toggle"
                       onclick="App.togglePasswordVisibility('secretKey')"
                       type="button" title="Hiện/ẩn">👁</button>
@@ -72,7 +61,6 @@
           </div>
         </div>
 
-        <!-- Dropdown chọn API Host -->
         <div class="host-select-row">
           <div class="form-group">
             <label>API HOST</label>
@@ -84,17 +72,13 @@
         </div>
       </div>
 
-      <!-- Nút Kết nối / Ngắt kết nối -->
       <div class="btn-row">
-        <!-- Nút kết nối — gọi App.connect() -->
         <button class="btn btn-primary" id="connectBtn" onclick="App.connect()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
           </svg>
           Kết nối
         </button>
-
-        <!-- Nút ngắt kết nối — ẩn mặc định, hiện khi đã connect -->
         <button class="btn btn-danger" id="disconnectBtn"
                 style="display:none" onclick="App.disconnect()">
           Ngắt kết nối
@@ -103,12 +87,77 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════
-         CARD: DANH SÁCH QUẢNG CÁO P2P MARKET
+         CARD: QUẢNG CÁO CỦA TÔI (My Ads)
          ═══════════════════════════════════════════════════
-         Hiển thị quảng cáo BUY/SELL từ tất cả merchant trên MEXC.
-         Có 2 tab: Mua (BUY) và Bán (SELL).
-         Hỗ trợ: lọc theo fiat, làm mới, phân trang.
+         Hiển thị tất cả ads của bản thân (cả OPEN và CLOSE).
+         Đặt phía trên Market Ads để merchant quản lý ads trước.
     -->
+    <div class="card" id="myAdsCard">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        Quảng cáo của tôi
+        <!-- Nút làm mới ads cá nhân -->
+        <button class="btn btn-ghost btn-sm" onclick="App.loadMyAds()" title="Làm mới" style="margin-left:auto">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Làm mới
+        </button>
+      </div>
+
+      <!-- Bộ lọc trạng thái ads -->
+      <div class="my-ads-filters">
+        <button class="filter-chip active" data-filter="ALL" onclick="App.filterMyAds('ALL')">
+          Tất cả
+        </button>
+        <button class="filter-chip" data-filter="OPEN" onclick="App.filterMyAds('OPEN')">
+          🟢 Đang mở
+        </button>
+        <button class="filter-chip" data-filter="CLOSE" onclick="App.filterMyAds('CLOSE')">
+          🔴 Đã đóng
+        </button>
+      </div>
+
+      <!-- Bảng ads cá nhân -->
+      <div class="table-wrapper" id="myAdsTableWrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã QC</th>
+              <th>Loại</th>
+              <th>Trạng thái</th>
+              <th>Coin</th>
+              <th>Giá</th>
+              <th>Khả dụng / Tổng</th>
+              <th>Giới hạn</th>
+              <th>Fiat</th>
+              <th>Thanh toán</th>
+              <th>Ngày tạo</th>
+            </tr>
+          </thead>
+          <tbody id="myAdsTableBody">
+            <tr class="empty-row">
+              <td colspan="10">
+                <div class="empty-state">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                  <p>Kết nối để xem quảng cáo của bạn</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Phân trang My Ads -->
+      <div class="pagination" id="myAdsPagination"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         CARD: DANH SÁCH QUẢNG CÁO P2P MARKET
+         ═══════════════════════════════════════════════════ -->
     <div class="card">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -117,20 +166,15 @@
         Quảng cáo P2P Market
       </div>
 
-      <!-- ─── Thanh Tab + Bộ lọc ─── -->
       <div class="tabs-header">
-        <!-- Tab Mua — mặc định active -->
         <button class="tab-btn active" data-tab="buy" onclick="App.switchTab('buy')">
           🟢 Mua (BUY)
         </button>
-        <!-- Tab Bán -->
         <button class="tab-btn" data-tab="sell" onclick="App.switchTab('sell')">
           🔴 Bán (SELL)
         </button>
 
-        <!-- Bộ lọc + nút làm mới (bên phải) -->
         <div class="tabs-actions">
-          <!-- Dropdown lọc theo loại tiền fiat -->
           <select class="fiat-select" id="fiatFilter" onchange="App.refreshAds()">
             <option value="VND" selected>VND</option>
             <option value="USD">USD</option>
@@ -142,8 +186,6 @@
             <option value="KRW">KRW</option>
             <option value="THB">THB</option>
           </select>
-
-          <!-- Nút làm mới dữ liệu -->
           <button class="btn btn-ghost" onclick="App.refreshAds()" title="Làm mới">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -153,22 +195,21 @@
         </div>
       </div>
 
-      <!-- ─── Panel: Tab MUA (BUY) ─── -->
+      <!-- BUY Panel -->
       <div class="tab-panel active" id="buyPanel">
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>Merchant</th>        <!-- Tên người bán -->
-                <th>Giá</th>             <!-- Giá mỗi đơn vị coin -->
-                <th>Khả dụng</th>        <!-- Số coin còn bán -->
-                <th>Giới hạn</th>        <!-- Min - Max giao dịch -->
-                <th>Thanh toán</th>       <!-- Phương thức thanh toán -->
-                <th>Thời gian</th>        <!-- Thời gian thanh toán tối đa -->
-                <th></th>                 <!-- Nút hành động -->
+                <th>Merchant</th>
+                <th>Giá</th>
+                <th>Khả dụng</th>
+                <th>Giới hạn</th>
+                <th>Thanh toán</th>
+                <th>Thời gian</th>
+                <th></th>
               </tr>
             </thead>
-            <!-- Nội dung bảng — được render bởi JavaScript (app.js) -->
             <tbody id="buyTableBody">
               <tr class="empty-row">
                 <td colspan="7">
@@ -183,11 +224,10 @@
             </tbody>
           </table>
         </div>
-        <!-- Thanh phân trang — render bởi JavaScript -->
         <div class="pagination" id="buyPagination"></div>
       </div>
 
-      <!-- ─── Panel: Tab BÁN (SELL) ─── -->
+      <!-- SELL Panel -->
       <div class="tab-panel" id="sellPanel">
         <div class="table-wrapper">
           <table>
@@ -221,16 +261,9 @@
     </div>
   </div>
 
-  <!-- ═══ TOAST CONTAINER ════════════════════════════════
-       Vùng chứa các thông báo popup (góc trên phải).
-       Các toast được thêm vào đây bởi JavaScript khi cần.
-  -->
+  <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- ═══ JAVASCRIPT ═════════════════════════════════════
-       Load file app.js — chứa toàn bộ logic frontend.
-       Đặt cuối body để HTML render trước, JS chạy sau.
-  -->
   <script src="/js/app.js"></script>
 </body>
 </html>

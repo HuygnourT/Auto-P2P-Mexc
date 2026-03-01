@@ -775,3 +775,160 @@ tbody td {
   table { font-size: 12px; }
   thead th, tbody td { padding: 10px 10px; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   MY ADS — Quảng cáo của tôi (bổ sung)
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── Filter chips (Tất cả / Đang mở / Đã đóng) ─────── */
+.my-ads-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-chip {
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-body);
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.filter-chip.active {
+  background: var(--accent-blue-glow);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+/* ─── Nút nhỏ (btn-sm) cho card title ───────────────── */
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 11px;
+}
+
+/* ─── Side badge (MUA / BÁN) ────────────────────────── */
+.side-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.side-buy {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.side-sell {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+/* ─── Status badge (Đang mở / Đã đóng) ─────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-open {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.status-open .status-indicator {
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green-glow);
+}
+
+.status-closed {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+}
+
+.status-closed .status-indicator {
+  background: var(--text-muted);
+}
+
+/* ─── Dòng ads đã đóng — mờ hơn ────────────────────── */
+.ad-closed td {
+  opacity: 0.5;
+}
+
+.ad-closed:hover td {
+  opacity: 0.75;
+}
+
+/* ─── Cell style cho My Ads table ────────────────────── */
+.mono-cell {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* ─── My Ads loading overlay ─────────────────────────── */
+.my-ads-loading {
+  position: relative;
+}
+
+.my-ads-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 23, 0.6);
+  backdrop-filter: blur(2px);
+  border-radius: var(--radius-sm);
+  z-index: 2;
+}
+
+.my-ads-loading::before {
+  content: 'Đang tải...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  z-index: 3;
+}
+
+/* ─── My Ads table — cỡ chữ nhỏ hơn vì nhiều cột ──── */
+#myAdsCard table {
+  font-size: 12px;
+}
+
+#myAdsCard thead th {
+  font-size: 10px;
+  padding: 10px 12px;
+}
+
+#myAdsCard tbody td {
+  padding: 10px 12px;
+}
