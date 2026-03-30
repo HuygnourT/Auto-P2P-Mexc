@@ -400,6 +400,91 @@ select {
   pointer-events: none;  /* Không cho click/nhập */
 }
 
+/* ─── Market Filter Bar ────────────────────────────── */
+
+.market-filter-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.market-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.filter-input-unit {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.filter-input-unit:focus-within {
+  border-color: var(--border-focus);
+}
+
+.filter-input {
+  width: 100px;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* Ẩn mũi tên spin của number input */
+.filter-input::-webkit-inner-spin-button,
+.filter-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.filter-input[type=number] { -moz-appearance: textfield; }
+
+.filter-unit {
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  border-left: 1px solid var(--border);
+  white-space: nowrap;
+  line-height: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+/* Trạng thái filter đang áp dụng */
+.filter-status {
+  display: none;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--accent-blue);
+  padding: 4px 8px;
+  background: var(--accent-blue-glow);
+  border-radius: var(--radius-sm);
+}
+
 /* ═══ 7. TABS ══════════════════════════════════════════
    2 tab: BUY (xanh lá) và SELL (đỏ)
 */

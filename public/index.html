@@ -157,6 +157,36 @@
         </svg>
         Quảng cáo P2P Market
       </div>
+      <!-- Bộ lọc & thông số -->
+      <div class="market-filter-bar">
+        <div class="market-filter-group">
+          <label class="filter-label">Online tối đa</label>
+          <div class="filter-input-unit">
+            <input type="number" id="filterOnlineMinutes" class="filter-input" placeholder="∞" min="1" step="1">
+            <span class="filter-unit">phút</span>
+          </div>
+        </div>
+        <div class="market-filter-group">
+          <label class="filter-label">Số lượng giao dịch</label>
+          <div class="filter-input-unit">
+            <input type="number" id="filterAmount" class="filter-input" placeholder="—" min="0" step="1">
+            <span class="filter-unit" id="filterAmountUnit">VND</span>
+          </div>
+        </div>
+        <div class="market-filter-group">
+          <label class="filter-label">Tự động làm mới</label>
+          <div class="filter-input-unit">
+            <input type="number" id="filterAutoRefresh" class="filter-input" placeholder="0 = tắt" min="0" step="1">
+            <span class="filter-unit">giây</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="applyFilterBtn" onclick="App.updateMarketFilters()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+          Cập nhật
+        </button>
+        <div class="filter-status" id="filterStatus"></div>
+      </div>
+
       <div class="tabs-header">
         <button class="tab-btn active" data-tab="buy" onclick="App.switchTab('buy')">🟢 Mua (BUY)</button>
         <button class="tab-btn" data-tab="sell" onclick="App.switchTab('sell')">🔴 Bán (SELL)</button>

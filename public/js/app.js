@@ -15,18 +15,36 @@ const App = (() => {
     secondaryConnected: false,  // Đã kết nối API phụ chưa
     currentTab: 'buy',          // Tab đang chọn: 'buy' hoặc 'sell'
     loading: false,             // Đang tải dữ liệu
-    buyAds: [],                 // Danh sách ads BUY từ market
-    sellAds: [],                // Danh sách ads SELL từ market
-    buyPage: { current: 1, total: 1 },   // Phân trang tab BUY
-    sellPage: { current: 1, total: 1 },  // Phân trang tab SELL
-    fiatUnit: 'VND',            // Loại tiền fiat đang lọc
+
+    // ── Market Ads (raw = toàn bộ từ API, filtered = sau lọc) ──
+    buyAdsRaw: [],
+    sellAdsRaw: [],
+    buyAds: [],
+    sellAds: [],
+    // startPage: trang API đầu tiên của batch hiện tại
+    // fetchedUpTo: trang API cuối cùng đã fetch trong batch
+    // total: tổng số trang API
+    // history: stack startPage của các batch trước (để "Prev" quay lại)
+    buyPage: { startPage: 1, fetchedUpTo: 1, total: 1, history: [] },
+    sellPage: { startPage: 1, fetchedUpTo: 1, total: 1, history: [] },
+    fiatUnit: 'VND',
+
+    // ── Bộ lọc Market Ads ──
+    marketFilters: {
+      onlineMinutes: 0,   // 0 = không lọc; >0 = merchant phải online trong X phút gần đây
+      amount: 0,          // 0 = không lọc; >0 = số lượng phải nằm trong giới hạn merchant
+      autoRefreshSec: 0,  // 0 = tắt; >0 = tự động làm mới mỗi X giây
+    },
 
     // ── My Ads state ──
-    myAds: [],                 // Danh sách tất cả ads của bản thân (OPEN + CLOSE)
-    myAdsFiltered: [],         // Danh sách đã lọc theo filter hiện tại
-    myAdsFilter: 'ALL',        // Bộ lọc hiện tại: 'ALL', 'OPEN', 'CLOSE'
-    myAdsPage: { current: 1, total: 1 },  // Phân trang my ads
+    myAds: [],
+    myAdsFiltered: [],
+    myAdsFilter: 'ALL',
+    myAdsPage: { current: 1, total: 1 },
   };
+
+  // Timer auto-refresh (handle của setInterval)
+  let autoRefreshTimer = null;
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
@@ -150,8 +168,11 @@ const App = (() => {
   async function disconnectSecondary() {
     await api.post('/api/disconnect/secondary');
     state.secondaryConnected = false;
-    state.buyAds = [];
-    state.sellAds = [];
+    state.buyAdsRaw = []; state.buyAds = [];
+    state.sellAdsRaw = []; state.sellAds = [];
+    state.buyPage = { startPage: 1, fetchedUpTo: 1, total: 1, history: [] };
+    state.sellPage = { startPage: 1, fetchedUpTo: 1, total: 1, history: [] };
+    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
     updateSecondaryConnectionUI(false);
     renderAdsTable('buy');
     renderAdsTable('sell');
@@ -383,36 +404,67 @@ const App = (() => {
 
   /**
    * Lấy danh sách quảng cáo từ market theo side (BUY/SELL).
-   * Gọi GET /api/market/ads với fiatUnit và page.
-   * Lưu kết quả vào state rồi render bảng HTML.
+   * Tự động lấy thêm trang tiếp theo nếu số lượng sau lọc < MIN_FILTERED,
+   * cho đến khi đủ MIN_FILTERED hoặc đến trang cuối.
    * @param {string} side - 'BUY' hoặc 'SELL'
-   * @param {number} page - Số trang (mặc định 1)
+   * @param {number} startPage - Trang API bắt đầu của batch này (mặc định 1)
+   * @param {boolean} pushHistory - Lưu startPage cũ vào history (để Prev hoạt động)
    */
-  async function loadMarketAds(side, page = 1) {
+  async function loadMarketAds(side, startPage = 1, pushHistory = false) {
     if (!state.secondaryConnected) return;
 
+    const MIN_FILTERED = 10;
     const fiatUnit = document.getElementById('fiatFilter')?.value || state.fiatUnit;
     state.fiatUnit = fiatUnit;
 
     const tabKey = side === 'BUY' ? 'buy' : 'sell';
+    const pageState = state[`${tabKey}Page`];
+
     setTableLoading(tabKey, true);
 
     try {
-      const result = await api.get(
-        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN`
-      );
-
-      console.log(`[${side}] API response:`, result);
-
-      if (result.code === 0) {
-        state[`${tabKey}Ads`] = result.data || [];
-        state[`${tabKey}Page`] = {
-          current: result.page?.currPage || 1,
-          total: result.page?.totalPage || 1,
-        };
-      } else {
-        showToast(`Lỗi lấy dữ liệu ${side}: ${result.msg}`, 'error');
+      // Lưu startPage hiện tại vào history nếu đang đi tới
+      if (pushHistory) {
+        pageState.history.push(pageState.startPage);
       }
+
+      let accumulatedRaw = [];
+      let currentPage = startPage;
+      let totalPages = 1;
+
+      // Loop lấy từng trang cho đến khi đủ MIN_FILTERED ads (sau lọc) hoặc hết trang
+      do {
+        const result = await api.get(
+          `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${currentPage}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN`
+        );
+
+        if (result.code !== 0) {
+          showToast(`Lỗi lấy dữ liệu ${side} trang ${currentPage}: ${result.msg}`, 'error');
+          break;
+        }
+
+        const pageData = result.data || [];
+        totalPages = result.page?.totalPage || 1;
+        accumulatedRaw = accumulatedRaw.concat(pageData);
+
+        // Áp dụng filter trên toàn bộ dữ liệu đã gom
+        state[`${tabKey}AdsRaw`] = accumulatedRaw;
+        applyMarketFilters(tabKey);
+
+        // Đủ ads hoặc đã tới trang cuối thì dừng
+        if (state[`${tabKey}Ads`].length >= MIN_FILTERED || currentPage >= totalPages) break;
+
+        currentPage++;
+      } while (true);
+
+      // Cập nhật page state: giữ nguyên history, chỉ cập nhật các trường khác
+      state[`${tabKey}Page`] = {
+        history: pageState.history,
+        startPage,
+        fetchedUpTo: currentPage,
+        total: totalPages,
+      };
+
     } catch (err) {
       showToast(`Lỗi: ${err.message}`, 'error');
     } finally {
@@ -422,27 +474,125 @@ const App = (() => {
   }
 
   /**
+   * Áp dụng bộ lọc client-side lên raw ads của một tab.
+   * Lọc theo: online trong X phút, số lượng nằm trong giới hạn merchant.
+   * @param {string} tabKey - 'buy' hoặc 'sell'
+   */
+  function applyMarketFilters(tabKey) {
+    const raw = state[`${tabKey}AdsRaw`] || [];
+    const { onlineMinutes, amount } = state.marketFilters;
+    const now = Date.now();
+
+    state[`${tabKey}Ads`] = raw.filter(ad => {
+      const merchant = ad.merchant || {};
+
+      // Điều kiện online: lastOnlineTime phải trong vòng X phút tính từ thời điểm hiện tại
+      if (onlineMinutes > 0) {
+        const lastOnline = merchant.lastOnlineTime;
+        if (!lastOnline) return false;
+        const diffMin = (now - lastOnline) / 60000;
+        if (diffMin > onlineMinutes) return false;
+      }
+
+      // Điều kiện số lượng: amount phải nằm trong [minSingleTransAmount, maxSingleTransAmount]
+      if (amount > 0) {
+        const min = parseFloat(ad.minSingleTransAmount) || 0;
+        const max = parseFloat(ad.maxSingleTransAmount) || Infinity;
+        if (amount < min || amount > max) return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Đọc giá trị từ các input filter, cập nhật state.marketFilters,
+   * áp dụng lại filter cho cả 2 tab, và cài đặt lại auto-refresh.
+   */
+  function updateMarketFilters() {
+    const onlineMinutes = parseFloat(document.getElementById('filterOnlineMinutes').value) || 0;
+    const amount = parseFloat(document.getElementById('filterAmount').value) || 0;
+    const autoRefreshSec = parseInt(document.getElementById('filterAutoRefresh').value) || 0;
+
+    state.marketFilters = { onlineMinutes, amount, autoRefreshSec };
+
+    // Cập nhật label đơn vị số lượng theo fiat hiện tại
+    const fiat = document.getElementById('fiatFilter')?.value || state.fiatUnit;
+    const unitEl = document.getElementById('filterAmountUnit');
+    if (unitEl) unitEl.textContent = fiat;
+
+    // Áp dụng filter ngay lên data hiện có rồi render lại
+    applyMarketFilters('buy');
+    applyMarketFilters('sell');
+    renderAdsTable('buy');
+    renderAdsTable('sell');
+
+    // Cài đặt auto-refresh
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+    if (autoRefreshSec > 0) {
+      autoRefreshTimer = setInterval(async () => {
+        await loadMarketAds('BUY', state.buyPage.current);
+        await loadMarketAds('SELL', state.sellPage.current);
+      }, autoRefreshSec * 1000);
+    }
+
+    // Hiển thị trạng thái filter đang áp dụng
+    updateFilterStatus();
+
+    showToast('Đã cập nhật thông số', 'success');
+  }
+
+  /**
+   * Cập nhật dòng trạng thái hiển thị các filter đang hoạt động.
+   */
+  function updateFilterStatus() {
+    const el = document.getElementById('filterStatus');
+    if (!el) return;
+    const { onlineMinutes, amount, autoRefreshSec } = state.marketFilters;
+    const parts = [];
+    if (onlineMinutes > 0) parts.push(`Online ≤ ${onlineMinutes} phút`);
+    if (amount > 0) parts.push(`Số lượng: ${formatNumber(amount)}`);
+    if (autoRefreshSec > 0) parts.push(`Làm mới: ${autoRefreshSec}s`);
+    el.textContent = parts.length > 0 ? parts.join(' · ') : '';
+    el.style.display = parts.length > 0 ? 'block' : 'none';
+  }
+
+  /**
    * Làm mới dữ liệu ads của tab đang hiển thị.
-   * Gọi lại loadMarketAds với side tương ứng, quay về trang 1.
+   * Reset history và tải lại từ trang 1.
    */
   async function refreshAds() {
     const side = state.currentTab === 'buy' ? 'BUY' : 'SELL';
-    await loadMarketAds(side, 1);
+    const tabKey = state.currentTab;
+    // Reset history khi làm mới
+    state[`${tabKey}Page`].history = [];
+    await loadMarketAds(side, 1, false);
   }
 
   /**
    * Chuyển trang (trước/sau) trong danh sách ads.
+   * Trang "sau" bắt đầu từ fetchedUpTo + 1.
+   * Trang "trước" lấy startPage từ history stack.
    * @param {number} direction - +1 (trang sau) hoặc -1 (trang trước)
    */
   async function changePage(direction) {
     const tabKey = state.currentTab;
     const pageState = state[`${tabKey}Page`];
-    const newPage = pageState.current + direction;
-
-    if (newPage < 1 || newPage > pageState.total) return;
-
     const side = tabKey === 'buy' ? 'BUY' : 'SELL';
-    await loadMarketAds(side, newPage);
+
+    if (direction > 0) {
+      // Trang sau: bắt đầu từ trang API tiếp theo chưa fetch
+      if (pageState.fetchedUpTo >= pageState.total) return;
+      await loadMarketAds(side, pageState.fetchedUpTo + 1, true);
+    } else {
+      // Trang trước: lấy startPage cũ từ history
+      if (pageState.history.length === 0) return;
+      const prevStart = pageState.history.pop();
+      await loadMarketAds(side, prevStart, false);
+    }
   }
 
   // ─── Render giao diện Market Ads ─────────────────────
@@ -523,20 +673,31 @@ const App = (() => {
   }
 
   /**
-   * Cập nhật UI phân trang: nút Trước, Sau, và thông tin trang hiện tại.
+   * Cập nhật UI phân trang.
+   * Hiển thị range trang API đã fetch (ví dụ "Trang 1–3 / 15")
+   * và số lượng ads sau lọc.
    * @param {string} tabKey - 'buy' hoặc 'sell'
-   * @param {Object} pageInfo - { current, total }
+   * @param {Object} pageInfo - { startPage, fetchedUpTo, total, history }
    */
   function updatePagination(tabKey, pageInfo) {
     const el = document.getElementById(`${tabKey}Pagination`);
     if (!el) return;
 
+    const hasPrev = pageInfo.history && pageInfo.history.length > 0;
+    const hasNext = pageInfo.fetchedUpTo < pageInfo.total;
+    const filteredCount = state[`${tabKey}Ads`].length;
+
+    // Hiển thị "Trang X–Y / Z" nếu fetch nhiều hơn 1 trang, ngược lại "Trang X / Z"
+    const pageLabel = pageInfo.startPage < pageInfo.fetchedUpTo
+      ? `Trang ${pageInfo.startPage}–${pageInfo.fetchedUpTo} / ${pageInfo.total}`
+      : `Trang ${pageInfo.startPage} / ${pageInfo.total}`;
+
     el.innerHTML = `
-      <button class="btn-page" onclick="App.changePage(-1)" ${pageInfo.current <= 1 ? 'disabled' : ''}>
+      <button class="btn-page" onclick="App.changePage(-1)" ${hasPrev ? '' : 'disabled'}>
         ‹ Trước
       </button>
-      <span class="page-info">Trang ${pageInfo.current} / ${pageInfo.total}</span>
-      <button class="btn-page" onclick="App.changePage(1)" ${pageInfo.current >= pageInfo.total ? 'disabled' : ''}>
+      <span class="page-info">${pageLabel} · ${filteredCount} kết quả</span>
+      <button class="btn-page" onclick="App.changePage(1)" ${hasNext ? '' : 'disabled'}>
         Sau ›
       </button>
     `;
@@ -734,6 +895,7 @@ const App = (() => {
     refreshAds,
     changePage,
     loadMarketAds,
+    updateMarketFilters,
     loadMyAds,
     filterMyAds,
     changeMyAdsPage,
