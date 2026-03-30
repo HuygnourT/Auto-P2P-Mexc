@@ -5,19 +5,19 @@ const logger = require('../utils/logger');
 const config = require('../config');
 
 /**
- * Biến lưu service instance đang kết nối.
- * Khi người dùng nhập API Key và kết nối thành công, service được lưu ở đây.
- * Khi disconnect, biến này được set về null.
- * (Lưu ý: đây là in-memory, phù hợp cho single-user. Production nên dùng session.)
+ * activeService   — kết nối chính: dùng cho My Ads và các thao tác cá nhân.
+ * secondaryService — kết nối phụ: dùng riêng để lấy Market Ads.
  */
 let activeService = null;
+let secondaryService = null;
+
+// ══════════════════════════════════════════════════════
+// KẾT NỐI CHÍNH (Primary)
+// ══════════════════════════════════════════════════════
 
 /**
  * POST /api/connect
- * Chức năng: Khởi tạo kết nối đến MEXC API.
- * Nhận apiKey, secretKey, apiHost từ body.
- * Tạo MexcP2PService instance, gọi testConnection() để kiểm tra.
- * Nếu thành công, lưu service vào activeService để các route khác sử dụng.
+ * Khởi tạo kết nối chính. Dùng cho My Ads và các thao tác cá nhân.
  */
 router.post('/connect', async (req, res) => {
   try {
@@ -30,11 +30,10 @@ router.post('/connect', async (req, res) => {
     const host = apiHost || 'api.mexc.com';
     const service = new MexcP2PService(apiKey, secretKey, host);
 
-    // Thử kết nối bằng cách gọi 1 API đơn giản
     const connected = await service.testConnection();
     if (connected) {
       activeService = service;
-      logger.info(`Connected to MEXC P2P via ${host}`);
+      logger.info(`[Primary] Connected to MEXC P2P via ${host}`);
       return res.json({ code: 0, msg: 'Connected successfully', data: { host } });
     } else {
       return res.json({ code: -1, msg: 'Connection failed. Check your credentials.' });
@@ -47,31 +46,75 @@ router.post('/connect', async (req, res) => {
 
 /**
  * POST /api/disconnect
- * Chức năng: Ngắt kết nối, xóa service instance.
- * Sau khi gọi, các route yêu cầu kết nối sẽ bị chặn bởi middleware requireConnection.
+ * Ngắt kết nối chính.
  */
-router.post('/disconnect', (req, res) => {
+router.post('/disconnect', (_req, res) => {
   activeService = null;
-  logger.info('Disconnected from MEXC P2P');
+  logger.info('[Primary] Disconnected from MEXC P2P');
   res.json({ code: 0, msg: 'Disconnected' });
 });
 
 /**
  * GET /api/status
- * Chức năng: Kiểm tra trạng thái kết nối hiện tại.
- * Frontend gọi khi load trang để biết đã kết nối hay chưa.
+ * Trạng thái kết nối chính + phụ.
  */
-router.get('/status', (req, res) => {
+router.get('/status', (_req, res) => {
   res.json({
     code: 0,
-    data: { connected: !!activeService },
+    data: {
+      connected: !!activeService,
+      secondaryConnected: !!secondaryService,
+    },
   });
 });
 
+// ══════════════════════════════════════════════════════
+// KẾT NỐI PHỤ (Secondary) — dùng để lấy Market Ads
+// ══════════════════════════════════════════════════════
+
 /**
- * Middleware: Yêu cầu phải kết nối trước khi truy cập các route market.
- * Nếu chưa kết nối (activeService === null), trả 401 và yêu cầu nhập credentials.
+ * POST /api/connect/secondary
+ * Khởi tạo kết nối phụ. Dùng riêng để lấy danh sách quảng cáo từ P2P Market.
  */
+router.post('/connect/secondary', async (req, res) => {
+  try {
+    const { apiKey, secretKey, apiHost } = req.body;
+
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({ code: -1, msg: 'API Key and Secret Key are required' });
+    }
+
+    const host = apiHost || 'api.mexc.com';
+    const service = new MexcP2PService(apiKey, secretKey, host);
+
+    const connected = await service.testConnection();
+    if (connected) {
+      secondaryService = service;
+      logger.info(`[Secondary] Connected to MEXC P2P via ${host}`);
+      return res.json({ code: 0, msg: 'Secondary connected successfully', data: { host } });
+    } else {
+      return res.json({ code: -1, msg: 'Secondary connection failed. Check your credentials.' });
+    }
+  } catch (error) {
+    logger.error('Secondary connect error:', error.message);
+    return res.status(500).json({ code: -1, msg: error.message });
+  }
+});
+
+/**
+ * POST /api/disconnect/secondary
+ * Ngắt kết nối phụ.
+ */
+router.post('/disconnect/secondary', (_req, res) => {
+  secondaryService = null;
+  logger.info('[Secondary] Disconnected from MEXC P2P');
+  res.json({ code: 0, msg: 'Secondary disconnected' });
+});
+
+// ══════════════════════════════════════════════════════
+// MIDDLEWARE
+// ══════════════════════════════════════════════════════
+
 function requireConnection(req, res, next) {
   if (!activeService) {
     return res.status(401).json({ code: -1, msg: 'Not connected. Please enter API credentials.' });
@@ -79,27 +122,40 @@ function requireConnection(req, res, next) {
   next();
 }
 
+function requireSecondaryConnection(_req, res, next) {
+  if (!secondaryService) {
+    return res.status(401).json({ code: -1, msg: 'Secondary not connected. Please enter secondary API credentials.' });
+  }
+  next();
+}
+
+// ══════════════════════════════════════════════════════
+// MARKET ADS — dùng kết nối PHỤ
+// ══════════════════════════════════════════════════════
+
 /**
  * GET /api/market/ads
- * Chức năng: Lấy danh sách quảng cáo BUY hoặc SELL trên market P2P.
- * Query params: side (BUY/SELL), fiatUnit (VND/USD/...), coinId, page, amount, payMethod.
- * Đây là route chính hiển thị bảng ads trên giao diện.
+ * Lấy danh sách quảng cáo BUY/SELL từ P2P Market.
+ * Sử dụng secondaryService (kết nối phụ).
  */
-router.get('/market/ads', requireConnection, async (req, res) => {
+router.get('/market/ads', requireSecondaryConnection, async (req, res) => {
   try {
-    const { side, fiatUnit, coinId, page, amount, payMethod } = req.query;
+    const { side, fiatUnit, coinId, page, amount, payMethod, blockTrade, allowTrade, countryCode } = req.query;
 
     if (!side) {
       return res.status(400).json({ code: -1, msg: 'side parameter is required (BUY or SELL)' });
     }
 
-    const result = await activeService.getMarketAds({
+    const result = await secondaryService.getMarketAds({
       side: side.toUpperCase(),
       fiatUnit: fiatUnit || 'VND',
       coinId: coinId || '',
       page: parseInt(page) || 1,
       amount: amount || '',
       payMethod: payMethod || '',
+      blockTrade: blockTrade !== undefined ? blockTrade === 'true' : true,
+      allowTrade: allowTrade !== undefined ? allowTrade === 'true' : true,
+      countryCode: countryCode || 'VN',
     });
 
     res.json(result);
@@ -109,11 +165,14 @@ router.get('/market/ads', requireConnection, async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════
+// MY ADS — dùng kết nối CHÍNH
+// ══════════════════════════════════════════════════════
+
 /**
  * GET /api/my/ads
- * Chức năng: Lấy danh sách quảng cáo của bản thân (merchant ads).
- * Query params: advStatus (OPEN/CLOSE), coinId, page, limit.
- * Dùng cho trang quản lý ads cá nhân (sẽ phát triển thêm).
+ * Lấy danh sách quảng cáo của bản thân (merchant ads).
+ * Sử dụng activeService (kết nối chính).
  */
 router.get('/my/ads', requireConnection, async (req, res) => {
   try {
@@ -135,9 +194,8 @@ router.get('/my/ads', requireConnection, async (req, res) => {
 
 /**
  * POST /api/my/ads/update
- * Chức năng: Cập nhật quảng cáo P2P hiện có.
- * Gọi API MEXC: POST /api/v3/fiat/merchant/ads/save_or_update
- * Body chứa advNo (bắt buộc khi update) + các trường cần sửa.
+ * Cập nhật quảng cáo P2P hiện có.
+ * Sử dụng activeService (kết nối chính).
  */
 router.post('/my/ads/update', requireConnection, async (req, res) => {
   try {

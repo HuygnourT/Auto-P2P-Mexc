@@ -11,14 +11,15 @@
 const App = (() => {
   // ─── State: Trạng thái toàn cục của ứng dụng ─────────
   let state = {
-    connected: false,          // Đã kết nối API chưa
-    currentTab: 'buy',         // Tab đang chọn: 'buy' hoặc 'sell'
-    loading: false,            // Đang tải dữ liệu
-    buyAds: [],                // Danh sách ads BUY từ market
-    sellAds: [],               // Danh sách ads SELL từ market
+    connected: false,           // Đã kết nối API chính chưa
+    secondaryConnected: false,  // Đã kết nối API phụ chưa
+    currentTab: 'buy',          // Tab đang chọn: 'buy' hoặc 'sell'
+    loading: false,             // Đang tải dữ liệu
+    buyAds: [],                 // Danh sách ads BUY từ market
+    sellAds: [],                // Danh sách ads SELL từ market
     buyPage: { current: 1, total: 1 },   // Phân trang tab BUY
     sellPage: { current: 1, total: 1 },  // Phân trang tab SELL
-    fiatUnit: 'VND',           // Loại tiền fiat đang lọc
+    fiatUnit: 'VND',            // Loại tiền fiat đang lọc
 
     // ── My Ads state ──
     myAds: [],                 // Danh sách tất cả ads của bản thân (OPEN + CLOSE)
@@ -102,6 +103,86 @@ const App = (() => {
     renderAdsTable('sell');
     renderMyAdsTable();
     showToast('Đã ngắt kết nối', 'info');
+  }
+
+  // ─── Kết nối phụ ─────────────────────────────────────
+
+  /**
+   * Kết nối API phụ dùng để lấy Market Ads.
+   * Lấy apiKey2, secretKey2, apiHost2 từ form input,
+   * gửi POST /api/connect/secondary.
+   * Nếu thành công, tự động load Market Ads.
+   */
+  async function connectSecondary() {
+    const apiKey = document.getElementById('apiKey2').value.trim();
+    const secretKey = document.getElementById('secretKey2').value.trim();
+    const apiHost = document.getElementById('apiHost2').value;
+
+    if (!apiKey || !secretKey) {
+      showToast('Vui lòng nhập API Key và Secret Key phụ', 'error');
+      return;
+    }
+
+    setLoading(true, 'connectBtn2');
+    try {
+      const result = await api.post('/api/connect/secondary', { apiKey, secretKey, apiHost });
+
+      if (result.code === 0) {
+        state.secondaryConnected = true;
+        updateSecondaryConnectionUI(true, apiHost);
+        showToast('Kết nối phụ thành công!', 'success');
+        await loadMarketAds('BUY');
+        await loadMarketAds('SELL');
+      } else {
+        showToast(result.msg || 'Kết nối phụ thất bại', 'error');
+      }
+    } catch (err) {
+      showToast('Lỗi kết nối phụ: ' + err.message, 'error');
+    } finally {
+      setLoading(false, 'connectBtn2');
+    }
+  }
+
+  /**
+   * Ngắt kết nối API phụ.
+   * Xóa dữ liệu Market Ads và cập nhật giao diện.
+   */
+  async function disconnectSecondary() {
+    await api.post('/api/disconnect/secondary');
+    state.secondaryConnected = false;
+    state.buyAds = [];
+    state.sellAds = [];
+    updateSecondaryConnectionUI(false);
+    renderAdsTable('buy');
+    renderAdsTable('sell');
+    showToast('Đã ngắt kết nối phụ', 'info');
+  }
+
+  /**
+   * Cập nhật giao diện card kết nối phụ.
+   * @param {boolean} connected - Trạng thái kết nối phụ
+   * @param {string} host - Tên host đang kết nối
+   */
+  function updateSecondaryConnectionUI(connected, host) {
+    const statusDot = document.getElementById('secondaryStatusDot');
+    const statusText = document.getElementById('secondaryStatusText');
+    const connectBtn = document.getElementById('connectBtn2');
+    const disconnectBtn = document.getElementById('disconnectBtn2');
+    const credSection = document.getElementById('secondaryCredentialInputs');
+
+    if (connected) {
+      statusDot.className = 'status-dot connected';
+      statusText.textContent = `Đã kết nối · ${host}`;
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-flex';
+      credSection.classList.add('locked');
+    } else {
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Chưa kết nối';
+      connectBtn.style.display = 'inline-flex';
+      disconnectBtn.style.display = 'none';
+      credSection.classList.remove('locked');
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -308,7 +389,7 @@ const App = (() => {
    * @param {number} page - Số trang (mặc định 1)
    */
   async function loadMarketAds(side, page = 1) {
-    if (!state.connected) return;
+    if (!state.secondaryConnected) return;
 
     const fiatUnit = document.getElementById('fiatFilter')?.value || state.fiatUnit;
     state.fiatUnit = fiatUnit;
@@ -318,7 +399,7 @@ const App = (() => {
 
     try {
       const result = await api.get(
-        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be`
+        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN`
       );
 
       console.log(`[${side}] API response:`, result);
@@ -626,16 +707,19 @@ const App = (() => {
       state.connected = true;
       updateConnectionUI(true, '');
       await loadMyAds();
+    }
+    if (status.data?.secondaryConnected) {
+      state.secondaryConnected = true;
+      updateSecondaryConnectionUI(true, '');
       await loadMarketAds('BUY');
       await loadMarketAds('SELL');
     }
 
     const config = await api.get('/api/config');
     if (config.data?.apiHosts) {
-      const select = document.getElementById('apiHost');
-      select.innerHTML = config.data.apiHosts
-        .map(h => `<option value="${h.value}">${h.label}</option>`)
-        .join('');
+      const hosts = config.data.apiHosts.map(h => `<option value="${h.value}">${h.label}</option>`).join('');
+      document.getElementById('apiHost').innerHTML = hosts;
+      document.getElementById('apiHost2').innerHTML = hosts;
     }
   }
 
@@ -644,13 +728,15 @@ const App = (() => {
     init,
     connect,
     disconnect,
+    connectSecondary,
+    disconnectSecondary,
     switchTab,
     refreshAds,
     changePage,
     loadMarketAds,
-    loadMyAds,                   // Tải ads cá nhân
-    filterMyAds,                 // Lọc ads cá nhân theo trạng thái
-    changeMyAdsPage,             // Chuyển trang ads cá nhân
+    loadMyAds,
+    filterMyAds,
+    changeMyAdsPage,
     viewAd,
     togglePasswordVisibility,
   };

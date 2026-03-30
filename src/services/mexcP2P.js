@@ -57,14 +57,13 @@ class MexcP2PService {
       fiatUnit: options.fiatUnit || 'VND',
       side: options.side,                      // BUY hoặc SELL
       coinId: options.coinId || config.defaultCoinId,
-      countryCode: options.countryCode || '',
+      countryCode: options.countryCode || 'VN',
       payMethod: options.payMethod || '',
       amount: options.amount || '',
       quantity: options.quantity || '',
       page: options.page || 1,
-      // blockTrade: options.blockTrade || false,
-      // allowTrade: options.allowTrade !== undefined ? options.allowTrade : '',
-      // haveTrade: options.haveTrade !== undefined ? options.haveTrade : '',
+      blockTrade: options.blockTrade !== undefined ? options.blockTrade : true,
+      allowTrade: options.allowTrade !== undefined ? options.allowTrade : true,
       follow: options.follow !== undefined ? options.follow : '',
     };
 
