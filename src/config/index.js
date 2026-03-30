@@ -17,7 +17,7 @@ const config = {
   defaultFiatUnit: 'VND',
 
   // coinId mặc định cho USDT trên MEXC
-  defaultCoinId: 'USDT',
+  defaultCoinId: '128f589271cb4951b03e71e6323eb7be',
 
   // Giới hạn request tối đa mỗi giây (theo tài liệu MEXC API)
   maxRequestsPerSecond: 10,

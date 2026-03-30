@@ -777,158 +777,120 @@ tbody td {
 }
 
 /* ═══════════════════════════════════════════════════════
-   MY ADS — Quảng cáo của tôi (bổ sung)
+   MY ADS — Quảng cáo của tôi
    ═══════════════════════════════════════════════════════ */
 
-/* ─── Filter chips (Tất cả / Đang mở / Đã đóng) ─────── */
-.my-ads-filters {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
+.my-ads-filters { display: flex; gap: 8px; margin-bottom: 16px; }
 
 .filter-chip {
-  padding: 6px 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: var(--font-body);
+  padding: 6px 16px; background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: 20px; color: var(--text-muted); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; font-family: var(--font-body);
+}
+.filter-chip:hover { background: rgba(255,255,255,0.08); color: var(--text-secondary); }
+.filter-chip.active { background: var(--accent-blue-glow); border-color: var(--accent-blue); color: var(--accent-blue); }
+
+.btn-sm { padding: 5px 12px; font-size: 11px; }
+
+.side-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; }
+.side-buy { background: var(--green-bg); color: var(--green); }
+.side-sell { background: var(--red-bg); color: var(--red); }
+
+.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.status-indicator { width: 6px; height: 6px; border-radius: 50%; }
+.status-open { background: var(--green-bg); color: var(--green); }
+.status-open .status-indicator { background: var(--green); box-shadow: 0 0 4px var(--green-glow); }
+.status-closed { background: rgba(255,255,255,0.04); color: var(--text-muted); }
+.status-closed .status-indicator { background: var(--text-muted); }
+
+.ad-closed td { opacity: 0.5; }
+.ad-closed:hover td { opacity: 0.75; }
+
+.mono-cell { font-family: var(--font-mono); font-size: 12px; }
+.text-muted { color: var(--text-muted); }
+
+.my-ads-loading { position: relative; }
+.my-ads-loading::after { content: ''; position: absolute; inset: 0; background: rgba(10,14,23,0.6); backdrop-filter: blur(2px); border-radius: var(--radius-sm); z-index: 2; }
+.my-ads-loading::before { content: 'Đang tải...'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--text-secondary); font-size: 13px; font-family: var(--font-mono); z-index: 3; }
+
+#myAdsCard table { font-size: 12px; }
+#myAdsCard thead th { font-size: 10px; padding: 10px 12px; }
+#myAdsCard tbody td { padding: 10px 12px; }
+
+/* Nút sửa trong bảng My Ads */
+.btn-edit {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 5px 10px; cursor: pointer; font-size: 13px; transition: all 0.2s;
+}
+.btn-edit:hover { background: var(--accent-blue-glow); border-color: var(--accent-blue); }
+
+/* ═══════════════════════════════════════════════════════
+   MODAL — Sửa quảng cáo
+   ═══════════════════════════════════════════════════════ */
+
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5); animation: modalIn 0.2s ease;
 }
 
-.filter-chip:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-secondary);
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.filter-chip.active {
-  background: var(--accent-blue-glow);
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+
+.modal-close {
+  background: none; border: none; color: var(--text-muted); font-size: 24px;
+  cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.2s;
+}
+.modal-close:hover { color: var(--text-primary); }
+
+.modal-body { padding: 20px 24px; }
+
+.modal-info-row {
+  display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px;
+}
+.modal-label { color: var(--text-secondary); min-width: 60px; font-weight: 500; }
+.modal-value { color: var(--text-primary); }
+.modal-value.mono { font-family: var(--font-mono); font-size: 12px; }
+
+.modal-divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+.modal-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+
+.modal-body .form-group { margin-bottom: 0; }
+.modal-body .form-group label { font-size: 11px; margin-bottom: 4px; display: block; }
+.modal-body input, .modal-body select { font-size: 13px; padding: 8px 12px; }
+
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 16px 24px; border-top: 1px solid var(--border);
 }
 
-/* ─── Nút nhỏ (btn-sm) cho card title ───────────────── */
-.btn-sm {
-  padding: 5px 12px;
-  font-size: 11px;
+/* Response box trong modal (để debug) */
+.modal-response {
+  margin-top: 16px; padding: 12px; background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.modal-response label { font-size: 11px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px; }
+.modal-response pre {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+  white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; margin: 0;
 }
 
-/* ─── Side badge (MUA / BÁN) ────────────────────────── */
-.side-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-
-.side-buy {
-  background: var(--green-bg);
-  color: var(--green);
-}
-
-.side-sell {
-  background: var(--red-bg);
-  color: var(--red);
-}
-
-/* ─── Status badge (Đang mở / Đã đóng) ─────────────── */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.status-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.status-open {
-  background: var(--green-bg);
-  color: var(--green);
-}
-
-.status-open .status-indicator {
-  background: var(--green);
-  box-shadow: 0 0 4px var(--green-glow);
-}
-
-.status-closed {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
-}
-
-.status-closed .status-indicator {
-  background: var(--text-muted);
-}
-
-/* ─── Dòng ads đã đóng — mờ hơn ────────────────────── */
-.ad-closed td {
-  opacity: 0.5;
-}
-
-.ad-closed:hover td {
-  opacity: 0.75;
-}
-
-/* ─── Cell style cho My Ads table ────────────────────── */
-.mono-cell {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.text-muted {
-  color: var(--text-muted);
-}
-
-/* ─── My Ads loading overlay ─────────────────────────── */
-.my-ads-loading {
-  position: relative;
-}
-
-.my-ads-loading::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(10, 14, 23, 0.6);
-  backdrop-filter: blur(2px);
-  border-radius: var(--radius-sm);
-  z-index: 2;
-}
-
-.my-ads-loading::before {
-  content: 'Đang tải...';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-family: var(--font-mono);
-  z-index: 3;
-}
-
-/* ─── My Ads table — cỡ chữ nhỏ hơn vì nhiều cột ──── */
-#myAdsCard table {
-  font-size: 12px;
-}
-
-#myAdsCard thead th {
-  font-size: 10px;
-  padding: 10px 12px;
-}
-
-#myAdsCard tbody td {
-  padding: 10px 12px;
+@media (max-width: 768px) {
+  .modal { width: 100%; margin: 10px; }
+  .modal-form-grid { grid-template-columns: 1fr; }
 }

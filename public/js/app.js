@@ -122,7 +122,7 @@ const App = (() => {
     try {
       // Gọi API lấy ads với advStatus=OPEN,CLOSE (tất cả trạng thái)
       const result = await api.get(
-        `/api/my/ads?merchantId=27939138&=`
+        `/api/my/ads?merchantId=27939138&advStatus=`
       );
 
       console.log('[My Ads] API response:', result);
@@ -318,7 +318,7 @@ const App = (() => {
 
     try {
       const result = await api.get(
-        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=USDT`
+        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be`
       );
 
       console.log(`[${side}] API response:`, result);

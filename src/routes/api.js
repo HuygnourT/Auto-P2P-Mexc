@@ -96,7 +96,7 @@ router.get('/market/ads', requireConnection, async (req, res) => {
     const result = await activeService.getMarketAds({
       side: side.toUpperCase(),
       fiatUnit: fiatUnit || 'VND',
-      coinId: coinId || config.defaultCoinId,
+      coinId: coinId || '',
       page: parseInt(page) || 1,
       amount: amount || '',
       payMethod: payMethod || '',
@@ -129,6 +129,29 @@ router.get('/my/ads', requireConnection, async (req, res) => {
     res.json(result);
   } catch (error) {
     logger.error('My ads error:', error.message);
+    res.status(500).json({ code: -1, msg: error.message });
+  }
+});
+
+/**
+ * POST /api/my/ads/update
+ * Chức năng: Cập nhật quảng cáo P2P hiện có.
+ * Gọi API MEXC: POST /api/v3/fiat/merchant/ads/save_or_update
+ * Body chứa advNo (bắt buộc khi update) + các trường cần sửa.
+ */
+router.post('/my/ads/update', requireConnection, async (req, res) => {
+  try {
+    const adData = req.body;
+
+    if (!adData.advNo) {
+      return res.status(400).json({ code: -1, msg: 'advNo is required for updating' });
+    }
+
+    logger.info(`[Update Ad] advNo=${adData.advNo}, price=${adData.price}`);
+    const result = await activeService.saveOrUpdateAd(adData);
+    res.json(result);
+  } catch (error) {
+    logger.error('Update ad error:', error.message);
     res.status(500).json({ code: -1, msg: error.message });
   }
 });

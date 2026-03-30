@@ -10,9 +10,7 @@
 
   <div class="app-container">
 
-    <!-- ═══════════════════════════════════════════════════
-         HEADER — Logo + Trạng thái kết nối
-         ═══════════════════════════════════════════════════ -->
+    <!-- HEADER -->
     <header class="app-header">
       <div class="logo-section">
         <div class="logo-icon">P2P</div>
@@ -27,9 +25,7 @@
       </div>
     </header>
 
-    <!-- ═══════════════════════════════════════════════════
-         CARD: THÔNG TIN KẾT NỐI API
-         ═══════════════════════════════════════════════════ -->
+    <!-- CARD: KẾT NỐI API -->
     <div class="card">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -37,30 +33,22 @@
         </svg>
         Thông tin kết nối API
       </div>
-
       <div id="credentialInputs">
         <div class="form-grid">
           <div class="form-group">
             <label>API KEY</label>
             <div class="input-wrapper">
-              <input type="text" id="apiKey"
-                     placeholder="Nhập API Key..."
-                     autocomplete="off" spellcheck="false">
+              <input type="text" id="apiKey" placeholder="Nhập API Key..." autocomplete="off" spellcheck="false">
             </div>
           </div>
           <div class="form-group">
             <label>SECRET KEY</label>
             <div class="input-wrapper">
-              <input type="password" id="secretKey"
-                     placeholder="Nhập Secret Key..."
-                     autocomplete="off" spellcheck="false">
-              <button class="input-toggle"
-                      onclick="App.togglePasswordVisibility('secretKey')"
-                      type="button" title="Hiện/ẩn">👁</button>
+              <input type="password" id="secretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false">
+              <button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey')" type="button" title="Hiện/ẩn">👁</button>
             </div>
           </div>
         </div>
-
         <div class="host-select-row">
           <div class="form-group">
             <label>API HOST</label>
@@ -71,93 +59,49 @@
           </div>
         </div>
       </div>
-
       <div class="btn-row">
         <button class="btn btn-primary" id="connectBtn" onclick="App.connect()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
           Kết nối
         </button>
-        <button class="btn btn-danger" id="disconnectBtn"
-                style="display:none" onclick="App.disconnect()">
-          Ngắt kết nối
-        </button>
+        <button class="btn btn-danger" id="disconnectBtn" style="display:none" onclick="App.disconnect()">Ngắt kết nối</button>
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         CARD: QUẢNG CÁO CỦA TÔI (My Ads)
-         ═══════════════════════════════════════════════════
-         Hiển thị tất cả ads của bản thân (cả OPEN và CLOSE).
-         Đặt phía trên Market Ads để merchant quản lý ads trước.
-    -->
+    <!-- CARD: QUẢNG CÁO CỦA TÔI -->
     <div class="card" id="myAdsCard">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
         </svg>
         Quảng cáo của tôi
-        <!-- Nút làm mới ads cá nhân -->
         <button class="btn btn-ghost btn-sm" onclick="App.loadMyAds()" title="Làm mới" style="margin-left:auto">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-          </svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Làm mới
         </button>
       </div>
-
-      <!-- Bộ lọc trạng thái ads -->
       <div class="my-ads-filters">
-        <button class="filter-chip active" data-filter="ALL" onclick="App.filterMyAds('ALL')">
-          Tất cả
-        </button>
-        <button class="filter-chip" data-filter="OPEN" onclick="App.filterMyAds('OPEN')">
-          🟢 Đang mở
-        </button>
-        <button class="filter-chip" data-filter="CLOSE" onclick="App.filterMyAds('CLOSE')">
-          🔴 Đã đóng
-        </button>
+        <button class="filter-chip active" data-filter="ALL" onclick="App.filterMyAds('ALL')">Tất cả</button>
+        <button class="filter-chip" data-filter="OPEN" onclick="App.filterMyAds('OPEN')">🟢 Đang mở</button>
+        <button class="filter-chip" data-filter="CLOSE" onclick="App.filterMyAds('CLOSE')">🔴 Đã đóng</button>
       </div>
-
-      <!-- Bảng ads cá nhân -->
       <div class="table-wrapper" id="myAdsTableWrapper">
         <table>
           <thead>
             <tr>
-              <th>Mã QC</th>
-              <th>Loại</th>
-              <th>Trạng thái</th>
-              <th>Coin</th>
-              <th>Giá</th>
-              <th>Khả dụng / Tổng</th>
-              <th>Giới hạn</th>
-              <th>Fiat</th>
-              <th>Thanh toán</th>
-              <th>Ngày tạo</th>
+              <th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th>
+              <th>Khả dụng / Tổng</th><th>Giới hạn</th><th>Fiat</th><th>Thanh toán</th><th>Ngày tạo</th><th></th>
             </tr>
           </thead>
           <tbody id="myAdsTableBody">
-            <tr class="empty-row">
-              <td colspan="10">
-                <div class="empty-state">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                  </svg>
-                  <p>Kết nối để xem quảng cáo của bạn</p>
-                </div>
-              </td>
-            </tr>
+            <tr class="empty-row"><td colspan="11"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><p>Kết nối để xem quảng cáo của bạn</p></div></td></tr>
           </tbody>
         </table>
       </div>
-      <!-- Phân trang My Ads -->
       <div class="pagination" id="myAdsPagination"></div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         CARD: DANH SÁCH QUẢNG CÁO P2P MARKET
-         ═══════════════════════════════════════════════════ -->
+    <!-- CARD: P2P MARKET -->
     <div class="card">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -165,105 +109,95 @@
         </svg>
         Quảng cáo P2P Market
       </div>
-
       <div class="tabs-header">
-        <button class="tab-btn active" data-tab="buy" onclick="App.switchTab('buy')">
-          🟢 Mua (BUY)
-        </button>
-        <button class="tab-btn" data-tab="sell" onclick="App.switchTab('sell')">
-          🔴 Bán (SELL)
-        </button>
-
+        <button class="tab-btn active" data-tab="buy" onclick="App.switchTab('buy')">🟢 Mua (BUY)</button>
+        <button class="tab-btn" data-tab="sell" onclick="App.switchTab('sell')">🔴 Bán (SELL)</button>
         <div class="tabs-actions">
           <select class="fiat-select" id="fiatFilter" onchange="App.refreshAds()">
-            <option value="VND" selected>VND</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="RUB">RUB</option>
-            <option value="CNY">CNY</option>
-            <option value="JPY">JPY</option>
-            <option value="KRW">KRW</option>
-            <option value="THB">THB</option>
+            <option value="VND" selected>VND</option><option value="USD">USD</option><option value="EUR">EUR</option>
+            <option value="GBP">GBP</option><option value="RUB">RUB</option><option value="CNY">CNY</option>
+            <option value="JPY">JPY</option><option value="KRW">KRW</option><option value="THB">THB</option>
           </select>
           <button class="btn btn-ghost" onclick="App.refreshAds()" title="Làm mới">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Làm mới
           </button>
         </div>
       </div>
-
-      <!-- BUY Panel -->
       <div class="tab-panel active" id="buyPanel">
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Merchant</th>
-                <th>Giá</th>
-                <th>Khả dụng</th>
-                <th>Giới hạn</th>
-                <th>Thanh toán</th>
-                <th>Thời gian</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="buyTableBody">
-              <tr class="empty-row">
-                <td colspan="7">
-                  <div class="empty-state">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
-                    <p>Kết nối để xem quảng cáo</p>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Thời gian</th><th></th></tr></thead>
+        <tbody id="buyTableBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><p>Kết nối để xem quảng cáo</p></div></td></tr></tbody></table></div>
         <div class="pagination" id="buyPagination"></div>
       </div>
-
-      <!-- SELL Panel -->
       <div class="tab-panel" id="sellPanel">
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Merchant</th>
-                <th>Giá</th>
-                <th>Khả dụng</th>
-                <th>Giới hạn</th>
-                <th>Thanh toán</th>
-                <th>Thời gian</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="sellTableBody">
-              <tr class="empty-row">
-                <td colspan="7">
-                  <div class="empty-state">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
-                    <p>Kết nối để xem quảng cáo</p>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Thời gian</th><th></th></tr></thead>
+        <tbody id="sellTableBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><p>Kết nối để xem quảng cáo</p></div></td></tr></tbody></table></div>
         <div class="pagination" id="sellPagination"></div>
       </div>
     </div>
   </div>
 
-  <!-- Toast Container -->
-  <div class="toast-container" id="toastContainer"></div>
+  <!-- ══════════════════════════════════════════
+       MODAL: SỬA QUẢNG CÁO
+       ══════════════════════════════════════════ -->
+  <div class="modal-overlay" id="editAdModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>✏️ Sửa quảng cáo</h3>
+        <button class="modal-close" onclick="App.closeEditModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-info-row">
+          <span class="modal-label">Mã QC:</span>
+          <span class="modal-value mono" id="editAdvNo">—</span>
+        </div>
+        <div class="modal-info-row">
+          <span class="modal-label">Loại:</span>
+          <span id="editSideBadge">—</span>
+        </div>
+        <div class="modal-info-row">
+          <span class="modal-label">Coin:</span>
+          <span class="modal-value" id="editCoinName">—</span>
+          <input type="hidden" id="editCoinId">
+        </div>
+        <hr class="modal-divider">
+        <div class="modal-form-grid">
+          <div class="form-group"><label>Giá (Price)</label><input type="number" id="editPrice" step="0.01"></div>
+          <div class="form-group"><label>Fiat</label><input type="text" id="editFiatUnit" placeholder="VND"></div>
+        </div>
+        <div class="modal-form-grid">
+          <div class="form-group"><label>Số lượng ban đầu (initQuantity)</label><input type="number" id="editInitQuantity" step="0.0001"></div>
+          <div class="form-group"><label>Thời gian thanh toán (phút)</label><input type="number" id="editPayTimeLimit" step="1"></div>
+        </div>
+        <div class="modal-form-grid">
+          <div class="form-group"><label>Giới hạn tối thiểu</label><input type="number" id="editMinAmount" step="0.01"></div>
+          <div class="form-group"><label>Giới hạn tối đa</label><input type="number" id="editMaxAmount" step="0.01"></div>
+        </div>
+        <div class="form-group" style="margin-top:10px">
+          <label>Trạng thái (advStatus)</label>
+          <select id="editAdvStatus">
+            <option value="">— Không thay đổi —</option>
+            <option value="OPEN">OPEN (Mở)</option>
+            <option value="CLOSE">CLOSE (Đóng)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-top:10px">
+          <label>Payment Method ID</label>
+          <input type="text" id="editPayMethod" placeholder="VD: 921">
+        </div>
+        <div class="modal-response" id="editResponse" style="display:none">
+          <label>API Response:</label>
+          <pre id="editResponseText"></pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="App.closeEditModal()">Hủy</button>
+        <button class="btn btn-primary" id="editSubmitBtn" onclick="App.submitEditAd()">💾 Cập nhật</button>
+      </div>
+    </div>
+  </div>
 
+  <div class="toast-container" id="toastContainer"></div>
   <script src="/js/app.js"></script>
 </body>
 </html>
