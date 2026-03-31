@@ -856,6 +856,96 @@ const App = (() => {
     input.type = input.type === 'password' ? 'text' : 'password';
   }
 
+  // ═══════════════════════════════════════════════════════
+  // TEST CẬP NHẬT GIÁ QUẢNG CÁO
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Đọc form test, build payload và gọi POST /api/my/ads/update.
+   * Hiển thị raw JSON response bên dưới form.
+   */
+  async function submitTestUpdateAd() {
+    const advNo = document.getElementById('testAdvNo').value.trim();
+    const price = document.getElementById('testPrice').value.trim();
+
+    if (!advNo) { showToast('advNo là bắt buộc', 'error'); return; }
+    if (!price)  { showToast('price là bắt buộc', 'error'); return; }
+
+    const payload = { advNo, price: parseFloat(price) };
+
+    const side = document.getElementById('testSide').value;
+    if (side) payload.side = side;
+
+    const fiatUnit = document.getElementById('testFiatUnit').value.trim();
+    if (fiatUnit) payload.fiatUnit = fiatUnit;
+
+    const coinId = document.getElementById('testCoinId').value.trim();
+    if (coinId) payload.coinId = coinId;
+
+    const payTimeLimit = document.getElementById('testPayTimeLimit').value.trim();
+    if (payTimeLimit) payload.payTimeLimit = parseInt(payTimeLimit);
+
+    const initQuantity = document.getElementById('testInitQuantity').value.trim();
+    if (initQuantity) payload.initQuantity = parseFloat(initQuantity);
+
+    const minAmount = document.getElementById('testMinAmount').value.trim();
+    if (minAmount) payload.minSingleTransAmount = parseFloat(minAmount);
+
+    const maxAmount = document.getElementById('testMaxAmount').value.trim();
+    if (maxAmount) payload.maxSingleTransAmount = parseFloat(maxAmount);
+
+    const payMethod = document.getElementById('testPayMethod').value.trim();
+    if (payMethod) payload.payMethod = payMethod;
+
+    const countryCode = document.getElementById('testCountryCode').value.trim();
+    if (countryCode) payload.countryCode = countryCode;
+
+    const kycLevel = document.getElementById('testKycLevel').value.trim();
+    if (kycLevel) payload.kycLevel = kycLevel;
+
+    setLoading(true, 'testUpdateBtn');
+    const responseEl = document.getElementById('testUpdateResponse');
+    const responseText = document.getElementById('testUpdateResponseText');
+    responseEl.style.display = 'none';
+    console.log(payload.minAmount + " " + payload.maxAmount);
+    try {
+      //const result = await api.post('/api/my/ads/update', payload);
+      const result = await api.post(
+        `/api/my/ads/update?advNo=${payload.advNo}&side=${payload.side}&fiatUnit=${payload.fiatUnit}&coinId=${payload.coinId}&payTimeLimit=${payload.payTimeLimit}&initQuantity=${payload.initQuantity}&minAmount=${payload.minAmount}&maxAmount=${payload.maxAmount}&payMethod=${payload.payMethod}&countryCode=${payload.countryCode}&kycLevel=${payload.kycLevel}`
+      );
+
+      responseEl.style.display = 'block';
+      responseText.textContent = JSON.stringify(result, null, 2);
+      if (result.code === 0) {
+        showToast('Cập nhật thành công!', 'success');
+        await loadMyAds();
+      } else {
+        showToast(`Lỗi: ${result.msg || 'Thất bại'}`, 'error');
+      }
+    } catch (err) {
+      responseEl.style.display = 'block';
+      responseText.textContent = err.message;
+      showToast('Lỗi gửi request: ' + err.message, 'error');
+    } finally {
+      setLoading(false, 'testUpdateBtn');
+    }
+  }
+
+  /** Xóa toàn bộ dữ liệu trong form test */
+  function clearTestUpdateForm() {
+    ['testAdvNo', 'testPrice', 'testPayTimeLimit', 'testInitQuantity', 'testMinAmount', 'testMaxAmount'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('testFiatUnit').value = 'VND';
+    document.getElementById('testCoinId').value = '128f589271cb4951b03e71e6323eb7be';
+    document.getElementById('testPayMethod').value = '1';
+    document.getElementById('testCountryCode').value = 'VN';
+    document.getElementById('testKycLevel').value = 'PRIMARY';
+    document.getElementById('testSide').value = 'BUY';
+    document.getElementById('testUpdateResponse').style.display = 'none';
+  }
+
   // ─── Khởi tạo ────────────────────────────────────────
 
   /**
@@ -901,6 +991,8 @@ const App = (() => {
     changeMyAdsPage,
     viewAd,
     togglePasswordVisibility,
+    submitTestUpdateAd,
+    clearTestUpdateForm,
   };
 })();
 

@@ -115,14 +115,32 @@ class MexcP2PService {
    * @param {Object} adData - Dữ liệu quảng cáo (price, coinId, side, payMethod, ...)
    * @returns {Promise<Object>} Response chứa advNo (mã quảng cáo)
    */
-  async saveOrUpdateAd(adData) {
-    const timestamp = Date.now();
-    const queryString = `timestamp=${timestamp}`;
-    const { generateSignature } = require('../utils/crypto');
-    const signature = generateSignature(queryString, this.secretKey);
+  async saveOrUpdateAd(options = {}) {
+    const params = {
+      advNo: options.advNo,
+      side: options.side,
+      fiatUnit: options.fiatUnit,
+      coinId: options.coinId,
+      payTimeLimit: options.payTimeLimit,
+      initQuantity: options.initQuantity,
+      minAmount: options.minAmount,
+      maxAmount: options.maxAmount,
+      payMethod: options.payMethod,
+      countryCode: options.countryCode,
+      kycLevel: options.kycLevel
+    };
+
+    const cleanParams = {};
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== '' && value !== undefined) {
+        cleanParams[key] = value;
+      }
+    }
+
+    const signedQuery = buildSignedQuery(cleanParams, this.secretKey);
 
     const response = await this.client.post(
-      `/api/v3/fiat/merchant/ads/save_or_update?timestamp=${timestamp}&signature=${signature}`,
+      `/api/v3/fiat/merchant/ads/save_or_update?timestamp=${signedQuery}`,
       adData
     );
     return response.data;
