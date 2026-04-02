@@ -871,6 +871,7 @@ const App = (() => {
     if (!advNo) { showToast('advNo là bắt buộc', 'error'); return; }
     if (!price)  { showToast('price là bắt buộc', 'error'); return; }
 
+    // Build payload với tên field khớp với backend service
     const payload = { advNo, price: parseFloat(price) };
 
     const side = document.getElementById('testSide').value;
@@ -907,12 +908,8 @@ const App = (() => {
     const responseEl = document.getElementById('testUpdateResponse');
     const responseText = document.getElementById('testUpdateResponseText');
     responseEl.style.display = 'none';
-    console.log(payload.minAmount + " " + payload.maxAmount);
     try {
-      //const result = await api.post('/api/my/ads/update', payload);
-      const result = await api.post(
-        `/api/my/ads/update?advNo=${payload.advNo}&side=${payload.side}&fiatUnit=${payload.fiatUnit}&coinId=${payload.coinId}&payTimeLimit=${payload.payTimeLimit}&initQuantity=${payload.initQuantity}&minAmount=${payload.minAmount}&maxAmount=${payload.maxAmount}&payMethod=${payload.payMethod}&countryCode=${payload.countryCode}&kycLevel=${payload.kycLevel}`
-      );
+      const result = await api.post('/api/my/ads/update', payload);
 
       responseEl.style.display = 'block';
       responseText.textContent = JSON.stringify(result, null, 2);
