@@ -41,6 +41,10 @@ const App = (() => {
     myAdsFiltered: [],
     myAdsFilter: 'ALL',
     myAdsPage: { current: 1, total: 1 },
+
+    // ── Auto-pricer state ──
+    myAdvNos: new Set(),   // advNo của ads của mình, để bỏ qua khi tìm giá thị trường
+    apConfigs: {},         // { [advNo]: { enabled, amount, ... } } — persist qua re-render
   };
 
   // Timer auto-refresh (handle của setInterval)
@@ -216,7 +220,7 @@ const App = (() => {
    * Gộp kết quả lại để hiển thị đầy đủ cả 2 trạng thái.
    * @param {number} page - Số trang (mặc định 1)
    */
-  async function loadMyAds(page = 1) {
+  async function loadMyAds(_page = 1) {
     if (!state.connected) return;
 
     setMyAdsLoading(true);
@@ -235,8 +239,12 @@ const App = (() => {
           current: result.page?.currPage || 1,
           total: result.page?.totalPage || 1,
         };
+        // Lưu advNo của mình để auto-pricer bỏ qua khi quét thị trường
+        state.myAdvNos = new Set(state.myAds.map(a => a.advNo || a.davNo || '').filter(Boolean));
         // Áp dụng filter hiện tại
         applyMyAdsFilter();
+        // Cập nhật bảng cấu hình auto-pricer
+        renderAutoPricerTable();
       } else {
         showToast(`Lỗi lấy ads cá nhân: ${result.msg}`, 'error');
       }
@@ -857,6 +865,330 @@ const App = (() => {
   }
 
   // ═══════════════════════════════════════════════════════
+  // AUTO-PRICER — Tự động chỉnh giá
+  // ═══════════════════════════════════════════════════════
+
+  let apTimer = null;   // handle setInterval của vòng quét
+
+  /**
+   * Render bảng cấu hình auto-pricer.
+   * Mỗi dòng = 1 ad của mình. Giữ nguyên giá trị đã nhập trong state.apConfigs.
+   */
+  function renderAutoPricerTable() {
+    const tbody = document.getElementById('apTableBody');
+    if (!tbody) return;
+
+    const ads = state.myAds;
+    if (!ads || ads.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="12" class="ap-empty">Kết nối API chính và tải quảng cáo để cấu hình</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = ads.map(ad => {
+      const advNo = ad.advNo || ad.davNo || '';
+      const isBuy = (ad.side || '').toUpperCase() === 'BUY';
+
+      // Giá trị mặc định lần đầu
+      if (!state.apConfigs[advNo]) {
+        state.apConfigs[advNo] = {
+          enabled: false,
+          amount: '',
+          onlineMinutes: 30,
+          offset: isBuy ? -50 : 50,
+          priceLimit: '',
+          refillThreshold: '',
+          refillQuantity: '',
+          minTrans: ad.minSingleTransAmount || '',
+          maxTrans: ad.maxSingleTransAmount || '',
+          lastStatus: '',
+        };
+      }
+      const c = state.apConfigs[advNo];
+
+      return `
+        <tr id="ap-row-${advNo}">
+          <td>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <span class="mono-cell" style="font-size:11px">${truncateId(advNo)}</span>
+              <span class="side-badge ${isBuy ? 'side-buy' : 'side-sell'}" style="font-size:10px">${isBuy ? 'BUY' : 'SELL'}</span>
+            </div>
+          </td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="App.apToggle('${advNo}', this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </td>
+          <td><input type="number" class="ap-num-input" value="${c.amount}" placeholder="—" onchange="App.apSetCfg('${advNo}','amount',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.onlineMinutes}" placeholder="∞" onchange="App.apSetCfg('${advNo}','onlineMinutes',this.value)"></td>
+          <td>
+            <div class="filter-input-unit" style="width:fit-content">
+              <input type="number" class="filter-input" style="width:70px" value="${c.offset}" onchange="App.apSetCfg('${advNo}','offset',this.value)">
+              <span class="filter-unit">VND</span>
+            </div>
+          </td>
+          <td><input type="number" class="ap-num-input" value="${c.priceLimit}" placeholder="${isBuy ? 'Trần' : 'Sàn'}" onchange="App.apSetCfg('${advNo}','priceLimit',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.refillThreshold}" placeholder="—" onchange="App.apSetCfg('${advNo}','refillThreshold',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.refillQuantity}" placeholder="—" onchange="App.apSetCfg('${advNo}','refillQuantity',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.minTrans}" placeholder="—" onchange="App.apSetCfg('${advNo}','minTrans',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.maxTrans}" placeholder="—" onchange="App.apSetCfg('${advNo}','maxTrans',this.value)"></td>
+          <td><span class="ap-row-status" id="ap-status-${advNo}">${c.lastStatus || '—'}</span></td>
+        </tr>`;
+    }).join('');
+  }
+
+  /** Bật/tắt từng dòng, không re-render toàn bộ bảng */
+  function apToggle(advNo, enabled) {
+    if (!state.apConfigs[advNo]) return;
+    state.apConfigs[advNo].enabled = enabled;
+  }
+
+  /** Cập nhật 1 field config của 1 ad */
+  function apSetCfg(advNo, field, value) {
+    if (!state.apConfigs[advNo]) return;
+    const num = parseFloat(value);
+    state.apConfigs[advNo][field] = isNaN(num) ? value : num;
+  }
+
+  /** Thêm 1 dòng vào log panel */
+  function apLog(msg, type = '') {
+    const log = document.getElementById('apLog');
+    if (!log) return;
+    // Xóa placeholder nếu còn
+    const empty = log.querySelector('.ap-log-empty');
+    if (empty) empty.remove();
+
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    const entry = document.createElement('div');
+    entry.className = 'ap-log-entry';
+    entry.innerHTML = `<span class="ap-log-time">${time}</span><span class="ap-log-msg ${type}">${escapeHtml(msg)}</span>`;
+    log.insertBefore(entry, log.firstChild);   // mới nhất trên đầu
+
+    // Giới hạn 200 dòng log
+    while (log.children.length > 200) log.removeChild(log.lastChild);
+  }
+
+  function clearAutoPricerLog() {
+    const log = document.getElementById('apLog');
+    if (log) log.innerHTML = '<div class="ap-log-empty">Chưa có hoạt động nào</div>';
+  }
+
+  /** Cập nhật status badge + nút start/stop */
+  function updateApStatusUI(running) {
+    const badge = document.getElementById('apStatusBadge');
+    const startBtn = document.getElementById('apStartBtn');
+    const stopBtn  = document.getElementById('apStopBtn');
+    if (!badge) return;
+    if (running) {
+      badge.textContent = '▶ Đang chạy';
+      badge.className = 'ap-status-badge running';
+      startBtn.style.display = 'none';
+      stopBtn.style.display  = 'inline-flex';
+    } else {
+      badge.textContent = '⏹ Đã dừng';
+      badge.className = 'ap-status-badge stopped';
+      startBtn.style.display = 'inline-flex';
+      stopBtn.style.display  = 'none';
+    }
+  }
+
+  /** Cập nhật ô status của 1 dòng */
+  function setApRowStatus(advNo, msg, type) {
+    const el = document.getElementById(`ap-status-${advNo}`);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `ap-row-status${type ? ' ' + type : ''}`;
+    if (state.apConfigs[advNo]) state.apConfigs[advNo].lastStatus = msg;
+  }
+
+  /**
+   * Lấy giá tốt nhất từ market, lọc bằng số lượng giao dịch (amount):
+   * chỉ lấy các ads mà amount nằm trong [minSingleTransAmount, maxSingleTransAmount].
+   * Bỏ qua ads của chính mình (state.myAdvNos).
+   * BUY: giá cao nhất → SELL: giá thấp nhất.
+   * @param {string} side - 'BUY' | 'SELL'
+   * @param {number} amount - Số lượng giao dịch để lọc (0 = không lọc)
+   * @param {number} onlineMinutes - 0 = không lọc
+   * @param {string} fiatUnit
+   * @returns {Promise<number|null>}
+   */
+  async function apFindBestPrice(side, amount, onlineMinutes, fiatUnit = 'VND', limit) {
+    const now = Date.now();
+    let page = 1;
+    let bestPrice = null;
+
+    // console.log("apFindBestPrice " + side + " " + amount);
+
+    while (page <= 5) {
+      const amountParam = amount > 0 ? `&amount=${amount}` : '';
+      // console.log("apFindBestPrice page " + page);
+      const result = await api.get(
+        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN${amountParam}`
+      );
+      if (result.code !== 0) break;
+
+      const ads = result.data || [];
+      if (ads.length === 0) break;
+
+      for (const ad of ads) {
+        // Bỏ qua ads của mình
+        if (state.myAdvNos.has(ad.advNo)) continue;
+
+        const price = parseFloat(ad.price);
+        if (isNaN(price)) continue;
+        
+        // Lọc online
+        if (onlineMinutes > 0) {
+          const lastOnline = ad.merchant.lastOnlineTime;
+          if (!lastOnline || (now - lastOnline) / 60000 > onlineMinutes) continue;
+        }
+
+        // BUY: lấy giá cao nhất | SELL: lấy giá thấp nhất
+        if (side === 'BUY') {
+          if (price > limit)
+            continue;
+          if (bestPrice === null || price > bestPrice) bestPrice = price;
+
+        } else {
+          if (price < limit)
+            continue;
+
+          if (bestPrice === null || price < bestPrice) bestPrice = price;
+        }
+      }
+
+      const totalPages = result.page?.totalPage || 1;
+      if (page >= totalPages) break;
+      page++;
+    }
+
+    return bestPrice;
+  }
+
+  /**
+   * 1 vòng quét: duyệt qua tất cả ads đã bật, tìm giá tốt nhất, cập nhật nếu cần.
+   */
+  async function apRunCycle() {
+    const ads = state.myAds;
+    if (!ads || ads.length === 0) return;
+
+    for (const ad of ads) {
+      const advNo = ad.advNo || ad.davNo || '';
+      const cfg = state.apConfigs[advNo];
+      if (!cfg || !cfg.enabled) continue;
+
+      const isBuy = (ad.side || '').toUpperCase() === 'BUY';
+      const side  = isBuy ? 'BUY' : 'SELL';
+      const fiat  = ad.fiatUnit || 'VND';
+
+      setApRowStatus(advNo, 'Đang quét...', '');
+
+      try {
+        // 1. Tìm giá tốt nhất trong khung
+        //console.log("apRunCycle find best price " + side + " " + cfg.amount);
+        const bestPrice = await apFindBestPrice(
+          side,
+          parseFloat(cfg.amount) || 0,
+          cfg.onlineMinutes || 0,
+          fiat,
+          cfg.priceLimit
+        );
+        console.log("apRunCycle best price " + bestPrice);
+
+        if (bestPrice === null) {
+          setApRowStatus(advNo, 'Không tìm được giá', 'warn');
+          apLog(`[${truncateId(advNo)}] Không tìm được giá tốt nhất trong khung`, 'warn');
+          continue;
+        }
+
+        // 2. Tính giá mới = bestPrice + offset
+        let newPrice = bestPrice + (parseFloat(cfg.offset) || 0);
+
+        // 3. Áp trần / sàn
+        if (cfg.priceLimit) {
+          const limit = parseFloat(cfg.priceLimit);
+          if (isBuy  && newPrice > limit) newPrice = limit;
+          if (!isBuy && newPrice < limit) newPrice = limit;
+        }
+
+        // Làm tròn về số nguyên (VND không có số lẻ thông thường)
+        newPrice = Math.round(newPrice);
+
+        const currentPrice = parseFloat(ad.price);
+
+        // 4. Chỉ update khi giá thay đổi
+        if (newPrice === currentPrice) {
+          setApRowStatus(advNo, `Giá OK: ${formatNumber(currentPrice)}`, 'ok');
+          continue;
+        }
+
+        // 5. Build payload update
+        const payload = {
+          advNo,
+          advStatus: 'OPEN',
+          price: newPrice,
+          side,
+          fiatUnit: fiat,
+          coinId: ad.coinId || '128f589271cb4951b03e71e6323eb7be',
+          payTimeLimit: ad.payTimeLimit,
+          initQuantity: ad.availableQuantity,
+          minSingleTransAmount: cfg.minTrans,
+          maxSingleTransAmount: cfg.maxTrans,
+          //supplyQuantity : 0,
+          payMethod: 1237657,
+          countryCode: 'VN',
+          kycLevel: 'PRIMARY',
+        };
+
+        // 6. Refill nếu số lượng khả dụng thấp hơn ngưỡng
+        if (cfg.refillThreshold && cfg.refillQuantity) {
+          const avail = parseFloat(ad.availableQuantity) || 0;
+          console.log("Check avaiable : " + avail + " " + cfg.refillThreshold);
+          if (avail < parseFloat(cfg.refillThreshold)) {
+            payload.initQuantity = avail;
+            payload.supplyQuantity = parseFloat(cfg.refillQuantity);
+            apLog(`[${truncateId(advNo)}] Refill: ${avail} < ${cfg.refillThreshold} → set initQuantity=${cfg.refillQuantity}`, 'warn');
+          }
+        }
+
+        // 7. Gọi API
+        console.log("Check payload " + JSON.stringify(payload));
+        const result = await api.post('/api/my/ads/update', payload);
+
+        if (result.code === 0) {
+          ad.price = newPrice; // cập nhật local để vòng sau so sánh đúng
+          setApRowStatus(advNo, `Đã cập nhật → ${formatNumber(newPrice)}`, 'ok');
+          apLog(`[${truncateId(advNo)}] ${side} | Best: ${formatNumber(bestPrice)} | Mới: ${formatNumber(newPrice)}`, 'success');
+          loadMyAds();
+        } else {
+          setApRowStatus(advNo, `Lỗi: ${result.msg}`, 'err');
+          apLog(`[${truncateId(advNo)}] Lỗi API: ${result.msg}`, 'error');
+        }
+
+      } catch (err) {
+        setApRowStatus(advNo, `Lỗi: ${err.message}`, 'err');
+        apLog(`[${truncateId(advNo)}] Exception: ${err.message}`, 'error');
+      }
+    }
+  }
+
+  function startAutoPricer() {
+    if (apTimer) return;
+    const interval = Math.max(5, parseInt(document.getElementById('apScanInterval').value) || 30) * 1000;
+    updateApStatusUI(true);
+    apLog(`Auto-pricer bắt đầu — quét mỗi ${interval / 1000}s`, 'success');
+    apRunCycle(); // chạy ngay lập tức lần đầu
+    apTimer = setInterval(apRunCycle, interval);
+  }
+
+  function stopAutoPricer() {
+    if (apTimer) { clearInterval(apTimer); apTimer = null; }
+    updateApStatusUI(false);
+    apLog('Auto-pricer đã dừng', 'warn');
+  }
+
+  // ═══════════════════════════════════════════════════════
   // TEST CẬP NHẬT GIÁ QUẢNG CÁO
   // ═══════════════════════════════════════════════════════
 
@@ -990,6 +1322,12 @@ const App = (() => {
     togglePasswordVisibility,
     submitTestUpdateAd,
     clearTestUpdateForm,
+    renderAutoPricerTable,
+    startAutoPricer,
+    stopAutoPricer,
+    apToggle,
+    apSetCfg,
+    clearAutoPricerLog,
   };
 })();
 

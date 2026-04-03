@@ -1002,3 +1002,86 @@ tbody td {
   .modal { width: 100%; margin: 10px; }
   .modal-form-grid { grid-template-columns: 1fr; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   AUTO-PRICER — Tự động chỉnh giá
+   ═══════════════════════════════════════════════════════ */
+
+/* Controls bar — scan interval + start/stop + status */
+.ap-controls {
+  display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;
+  padding: 14px 16px; background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px;
+}
+
+/* Running status badge */
+.ap-status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 20px;
+  font-size: 12px; font-family: var(--font-mono); font-weight: 500;
+}
+.ap-status-badge.running {
+  background: var(--green-bg); color: var(--green);
+  border: 1px solid rgba(34,197,94,0.25);
+  animation: pulse 2s infinite;
+}
+.ap-status-badge.stopped {
+  background: rgba(255,255,255,0.04); color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* Toggle switch */
+.toggle { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0; background: var(--border);
+  border-radius: 22px; cursor: pointer; transition: 0.2s;
+}
+.toggle-slider::before {
+  content: ''; position: absolute;
+  width: 16px; height: 16px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: 0.2s;
+}
+.toggle input:checked + .toggle-slider { background: var(--accent-blue); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+/* Config table */
+.ap-table-wrap { overflow-x: auto; border-radius: var(--radius-sm); }
+.ap-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1000px; }
+.ap-table thead th {
+  text-align: left; padding: 9px 10px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted);
+  background: var(--bg-secondary); border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.ap-table tbody td { padding: 8px 10px; border-bottom: 1px solid rgba(30,42,58,0.5); vertical-align: middle; }
+.ap-table tbody tr:hover td { background: rgba(255,255,255,0.015); }
+.ap-num-input {
+  width: 110px; padding: 5px 8px !important;
+  font-size: 12px !important; font-family: var(--font-mono);
+}
+.ap-table .ap-empty { text-align: center; padding: 28px; color: var(--text-muted); font-size: 13px; }
+
+/* Per-row status */
+.ap-row-status { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.ap-row-status.ok { color: var(--green); }
+.ap-row-status.err { color: var(--red); }
+.ap-row-status.warn { color: var(--amber); }
+
+/* Log panel */
+.ap-log {
+  max-height: 200px; overflow-y: auto;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 8px;
+}
+.ap-log-entry {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 3px 0; border-bottom: 1px solid rgba(30,42,58,0.4);
+}
+.ap-log-entry:last-child { border-bottom: none; }
+.ap-log-time { color: var(--text-muted); font-size: 10px; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; }
+.ap-log-msg { font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary); word-break: break-word; }
+.ap-log-msg.success { color: var(--green); }
+.ap-log-msg.error   { color: var(--red); }
+.ap-log-msg.warn    { color: var(--amber); }
+.ap-log-empty { color: var(--text-muted); font-size: 12px; font-family: var(--font-mono); text-align: center; padding: 14px; }

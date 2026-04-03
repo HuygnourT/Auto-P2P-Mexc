@@ -1,0 +1,358 @@
+/* ═══════════════════════════════════════════════════════
+   AUTO-PRICING — Tự động chỉnh giá
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── Card Auto-Pricing ────────────────────────────── */
+.auto-pricing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.auto-pricing-header .card-title {
+  margin-bottom: 0;
+}
+
+/* ─── Job Cards ────────────────────────────────────── */
+.ap-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ap-job-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.ap-job-card.running {
+  border-left: 3px solid var(--green);
+}
+
+.ap-job-card.stopped {
+  border-left: 3px solid var(--red);
+  opacity: 0.7;
+}
+
+.ap-job-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ap-job-header:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ap-job-adv {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ap-job-side {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ap-job-side.buy {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.ap-job-side.sell {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.ap-job-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.ap-job-status .indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.ap-job-status.running .indicator {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green-glow);
+  animation: pulse 2s infinite;
+}
+
+.ap-job-status.running {
+  color: var(--green);
+}
+
+.ap-job-status.stopped .indicator {
+  background: var(--text-muted);
+}
+
+.ap-job-status.stopped {
+  color: var(--text-muted);
+}
+
+.ap-job-price {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.ap-job-price.buy { color: var(--green); }
+.ap-job-price.sell { color: var(--red); }
+
+.ap-job-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.ap-job-actions button {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+
+.ap-job-actions button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.ap-job-actions .btn-stop {
+  color: var(--amber);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.ap-job-actions .btn-stop:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.ap-job-actions .btn-start {
+  color: var(--green);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.ap-job-actions .btn-start:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.ap-job-actions .btn-remove {
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.ap-job-actions .btn-remove:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ─── Job Detail / Logs ──────────────────────────────── */
+.ap-job-detail {
+  display: none;
+  padding: 0 16px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.ap-job-detail.open {
+  display: block;
+}
+
+.ap-job-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.ap-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ap-meta-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.ap-meta-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ap-log-box {
+  margin-top: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.ap-log-entry {
+  display: flex;
+  gap: 8px;
+}
+
+.ap-log-time {
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ap-log-msg { color: var(--text-secondary); }
+.ap-log-msg.info { color: var(--text-secondary); }
+.ap-log-msg.warn { color: var(--amber); }
+.ap-log-msg.error { color: var(--red); }
+
+/* ─── Config Form ────────────────────────────────────── */
+.ap-config-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+}
+
+.ap-config-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ap-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.ap-form-grid .form-group label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ap-form-group-full {
+  grid-column: 1 / -1;
+}
+
+.ap-form-row {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+}
+
+.ap-form-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.ap-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ap-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+
+.ap-checkbox-row label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* ─── Empty State ────────────────────────────────────── */
+.ap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.ap-empty svg {
+  opacity: 0.25;
+}
+
+/* ─── Select ads from My Ads ─────────────────────────── */
+.ap-select-ad {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ap-select-ad select {
+  flex: 1;
+  font-size: 12px;
+}
+
+/* ─── Responsive ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ap-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ap-job-header {
+    flex-wrap: wrap;
+  }
+
+  .ap-job-price {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .ap-job-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .ap-job-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+}
