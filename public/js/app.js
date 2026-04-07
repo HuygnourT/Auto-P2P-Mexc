@@ -1135,8 +1135,9 @@ const App = (() => {
           initQuantity: ad.availableQuantity,
           minSingleTransAmount: cfg.minTrans,
           maxSingleTransAmount: cfg.maxTrans,
+          frozenQuantity: ad.frozenQuantity,
           //supplyQuantity : 0,
-          payMethod: 1237657,
+          payMethod: 1799581, // Update VCB
           countryCode: 'VN',
           kycLevel: 'PRIMARY',
         };
@@ -1151,6 +1152,12 @@ const App = (() => {
             apLog(`[${truncateId(advNo)}] Refill: ${avail} < ${cfg.refillThreshold} → set initQuantity=${cfg.refillQuantity}`, 'warn');
           }
         }
+        
+        console.log(payload.maxSingleTransAmount + " " + payload.initQuantity + " " + payload.frozenQuantity + " " + payload.price);
+        if (payload.maxSingleTransAmount > (payload.initQuantity - payload.frozenQuantity) * payload.price)
+        {
+          payload.maxSingleTransAmount = parseFloat(payload.initQuantity - payload.frozenQuantity) * payload.price - 1000;
+        }
 
         // 7. Gọi API
         console.log("Check payload " + JSON.stringify(payload));
@@ -1160,12 +1167,13 @@ const App = (() => {
           ad.price = newPrice; // cập nhật local để vòng sau so sánh đúng
           setApRowStatus(advNo, `Đã cập nhật → ${formatNumber(newPrice)}`, 'ok');
           apLog(`[${truncateId(advNo)}] ${side} | Best: ${formatNumber(bestPrice)} | Mới: ${formatNumber(newPrice)}`, 'success');
-          loadMyAds();
         } else {
           setApRowStatus(advNo, `Lỗi: ${result.msg}`, 'err');
           apLog(`[${truncateId(advNo)}] Lỗi API: ${result.msg}`, 'error');
         }
 
+        loadMyAds();
+        
       } catch (err) {
         setApRowStatus(advNo, `Lỗi: ${err.message}`, 'err');
         apLog(`[${truncateId(advNo)}] Exception: ${err.message}`, 'error');
