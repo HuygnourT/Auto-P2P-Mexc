@@ -880,7 +880,7 @@ const App = (() => {
 
     const ads = state.myAds;
     if (!ads || ads.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="12" class="ap-empty">Kết nối API chính và tải quảng cáo để cấu hình</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="14" class="ap-empty">Kết nối API chính và tải quảng cáo để cấu hình</td></tr>';
       return;
     }
 
@@ -900,6 +900,10 @@ const App = (() => {
           refillQuantity: '',
           minTrans: ad.minSingleTransAmount || '',
           maxTrans: ad.maxSingleTransAmount || '',
+          // ── 3 điều kiện lọc mới cho apFindBestPrice ──
+          userAllTradeCountMin: 0,   // Số GD tối thiểu của merchant đối thủ
+          userAllTradeCountMax: 0,   // Số GD tối đa của merchant đối thủ
+          filterMaxSingleTransAmount: 0, // Bỏ qua ads có maxSingleTransAmount > giá trị này
           lastStatus: '',
         };
       }
@@ -932,6 +936,9 @@ const App = (() => {
           <td><input type="number" class="ap-num-input" value="${c.refillQuantity}" placeholder="—" onchange="App.apSetCfg('${advNo}','refillQuantity',this.value)"></td>
           <td><input type="number" class="ap-num-input" value="${c.minTrans}" placeholder="—" onchange="App.apSetCfg('${advNo}','minTrans',this.value)"></td>
           <td><input type="number" class="ap-num-input" value="${c.maxTrans}" placeholder="—" onchange="App.apSetCfg('${advNo}','maxTrans',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.userAllTradeCountMin}" placeholder="—" onchange="App.apSetCfg('${advNo}','userAllTradeCountMin',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.userAllTradeCountMax}" placeholder="—" onchange="App.apSetCfg('${advNo}','userAllTradeCountMax',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.filterMaxSingleTransAmount}" placeholder="—" onchange="App.apSetCfg('${advNo}','filterMaxSingleTransAmount',this.value)"></td>
           <td><span class="ap-row-status" id="ap-status-${advNo}">${c.lastStatus || '—'}</span></td>
         </tr>`;
     }).join('');
@@ -1003,26 +1010,31 @@ const App = (() => {
   }
 
   /**
-   * Lấy giá tốt nhất từ market, lọc bằng số lượng giao dịch (amount):
-   * chỉ lấy các ads mà amount nằm trong [minSingleTransAmount, maxSingleTransAmount].
+   * Lấy giá tốt nhất từ market với các điều kiện lọc:
+   *   - amount: số lượng giao dịch (lọc qua API + client-side)
+   *   - onlineMinutes: merchant phải online trong X phút
+   *   - userAllTradeCountMin/Max: tổng số giao dịch fiat của merchant nằm trong khoảng
+   *   - filterMaxSingleTransAmount: bỏ qua ads có maxSingleTransAmount lớn hơn ngưỡng
+   *   - limit: trần (BUY) hoặc sàn (SELL) — ads vượt khỏi limit sẽ bị bỏ qua
+   *
    * Bỏ qua ads của chính mình (state.myAdvNos).
-   * BUY: giá cao nhất → SELL: giá thấp nhất.
+   * BUY → giá cao nhất; SELL → giá thấp nhất.
+   *
    * @param {string} side - 'BUY' | 'SELL'
-   * @param {number} amount - Số lượng giao dịch để lọc (0 = không lọc)
+   * @param {number} amount
    * @param {number} onlineMinutes - 0 = không lọc
    * @param {string} fiatUnit
+   * @param {number} limit - trần/sàn giá
+   * @param {Object} extraFilters - { userAllTradeCountMin, userAllTradeCountMax, filterMaxSingleTransAmount }
    * @returns {Promise<number|null>}
    */
-  async function apFindBestPrice(side, amount, onlineMinutes, fiatUnit = 'VND', limit) {
+  async function apFindBestPrice(side, amount, fiatUnit = 'VND', limit, extraFilters = {}) {
     const now = Date.now();
     let page = 1;
     let bestPrice = null;
 
-    // console.log("apFindBestPrice " + side + " " + amount);
-
     while (page <= 5) {
       const amountParam = amount > 0 ? `&amount=${amount}` : '';
-      // console.log("apFindBestPrice page " + page);
       const result = await api.get(
         `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN${amountParam}`
       );
@@ -1037,23 +1049,34 @@ const App = (() => {
 
         const price = parseFloat(ad.price);
         if (isNaN(price)) continue;
-        
+
         // Lọc online
-        if (onlineMinutes > 0) {
-          const lastOnline = ad.merchant.lastOnlineTime;
-          if (!lastOnline || (now - lastOnline) / 60000 > onlineMinutes) continue;
+        if (extraFilters.onlineMinutes > 0) {
+          const lastOnline = ad.merchant?.lastOnlineTime;
+          if (!lastOnline || (now - lastOnline) / 60000 > extraFilters.onlineMinutes) continue;
         }
 
-        // BUY: lấy giá cao nhất | SELL: lấy giá thấp nhất
+        if (ad.userAllTradeCountMin < extraFilters.userAllTradeCountMin)
+        {
+          continue;
+        }
+
+        if (ad.userAllTradeCountMax < extraFilters.userAllTradeCountMax)
+        {
+          continue;
+        }
+
+        if (ad.maxSingleTransAmount < extraFilters.maxSingleTransAmount)
+        {
+          continue;
+        }
+
+        // Lọc theo trần/sàn giá rồi cập nhật bestPrice
         if (side === 'BUY') {
-          if (price > limit)
-            continue;
+          if (limit && price > parseFloat(limit)) continue;
           if (bestPrice === null || price > bestPrice) bestPrice = price;
-
         } else {
-          if (price < limit)
-            continue;
-
+          if (limit && price < parseFloat(limit)) continue;
           if (bestPrice === null || price < bestPrice) bestPrice = price;
         }
       }
@@ -1085,14 +1108,19 @@ const App = (() => {
       setApRowStatus(advNo, 'Đang quét...', '');
 
       try {
-        // 1. Tìm giá tốt nhất trong khung
-        //console.log("apRunCycle find best price " + side + " " + cfg.amount);
+        // 1. Tìm giá tốt nhất với đầy đủ điều kiện lọc
         const bestPrice = await apFindBestPrice(
           side,
           parseFloat(cfg.amount) || 0,
-          cfg.onlineMinutes || 0,
+          
           fiat,
-          cfg.priceLimit
+          cfg.priceLimit,
+          {
+            onlineMinutes : cfg.onlineMinutes || 0,
+            userAllTradeCountMin: cfg.userAllTradeCountMin || 0,//cfg.userAllTradeCountMin,
+            userAllTradeCountMax: cfg.userAllTradeCountMax || 0,//cfg.userAllTradeCountMax,
+            maxSingleTransAmount: cfg.filterMaxSingleTransAmount || 0,//cfg.filterMaxSingleTransAmount,
+          }
         );
         console.log("apRunCycle best price " + bestPrice);
 
@@ -1112,9 +1140,7 @@ const App = (() => {
           if (!isBuy && newPrice < limit) newPrice = limit;
         }
 
-        // Làm tròn về số nguyên (VND không có số lẻ thông thường)
         newPrice = Math.round(newPrice);
-
         const currentPrice = parseFloat(ad.price);
 
         // 4. Chỉ update khi giá thay đổi
@@ -1136,8 +1162,7 @@ const App = (() => {
           minSingleTransAmount: cfg.minTrans,
           maxSingleTransAmount: cfg.maxTrans,
           frozenQuantity: ad.frozenQuantity,
-          //supplyQuantity : 0,
-          payMethod: 1799581, // Update VCB
+          payMethod: 1799581,
           countryCode: 'VN',
           kycLevel: 'PRIMARY',
         };
@@ -1152,10 +1177,9 @@ const App = (() => {
             apLog(`[${truncateId(advNo)}] Refill: ${avail} < ${cfg.refillThreshold} → set initQuantity=${cfg.refillQuantity}`, 'warn');
           }
         }
-        
+
         console.log(payload.maxSingleTransAmount + " " + payload.initQuantity + " " + payload.frozenQuantity + " " + payload.price);
-        if (payload.maxSingleTransAmount > (payload.initQuantity - payload.frozenQuantity) * payload.price)
-        {
+        if (payload.maxSingleTransAmount > (payload.initQuantity - payload.frozenQuantity) * payload.price) {
           payload.maxSingleTransAmount = parseFloat(payload.initQuantity - payload.frozenQuantity) * payload.price - 1000;
         }
 
@@ -1164,7 +1188,7 @@ const App = (() => {
         const result = await api.post('/api/my/ads/update', payload);
 
         if (result.code === 0) {
-          ad.price = newPrice; // cập nhật local để vòng sau so sánh đúng
+          ad.price = newPrice;
           setApRowStatus(advNo, `Đã cập nhật → ${formatNumber(newPrice)}`, 'ok');
           apLog(`[${truncateId(advNo)}] ${side} | Best: ${formatNumber(bestPrice)} | Mới: ${formatNumber(newPrice)}`, 'success');
         } else {
@@ -1173,7 +1197,7 @@ const App = (() => {
         }
 
         loadMyAds();
-        
+
       } catch (err) {
         setApRowStatus(advNo, `Lỗi: ${err.message}`, 'err');
         apLog(`[${truncateId(advNo)}] Exception: ${err.message}`, 'error');
@@ -1186,7 +1210,7 @@ const App = (() => {
     const interval = Math.max(5, parseInt(document.getElementById('apScanInterval').value) || 30) * 1000;
     updateApStatusUI(true);
     apLog(`Auto-pricer bắt đầu — quét mỗi ${interval / 1000}s`, 'success');
-    apRunCycle(); // chạy ngay lập tức lần đầu
+    apRunCycle();
     apTimer = setInterval(apRunCycle, interval);
   }
 
@@ -1200,10 +1224,6 @@ const App = (() => {
   // TEST CẬP NHẬT GIÁ QUẢNG CÁO
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * Đọc form test, build payload và gọi POST /api/my/ads/update.
-   * Hiển thị raw JSON response bên dưới form.
-   */
   async function submitTestUpdateAd() {
     const advNo = document.getElementById('testAdvNo').value.trim();
     const price = document.getElementById('testPrice').value.trim();
@@ -1211,7 +1231,6 @@ const App = (() => {
     if (!advNo) { showToast('advNo là bắt buộc', 'error'); return; }
     if (!price)  { showToast('price là bắt buộc', 'error'); return; }
 
-    // Build payload với tên field khớp với backend service
     const payload = { advNo, price: parseFloat(price) };
 
     const side = document.getElementById('testSide').value;
@@ -1268,7 +1287,6 @@ const App = (() => {
     }
   }
 
-  /** Xóa toàn bộ dữ liệu trong form test */
   function clearTestUpdateForm() {
     ['testAdvNo', 'testPrice', 'testPayTimeLimit', 'testInitQuantity', 'testMinAmount', 'testMaxAmount'].forEach(id => {
       const el = document.getElementById(id);
@@ -1285,10 +1303,6 @@ const App = (() => {
 
   // ─── Khởi tạo ────────────────────────────────────────
 
-  /**
-   * Hàm khởi tạo chạy khi DOM loaded.
-   * Kiểm tra trạng thái kết nối, tải config, auto-load data nếu đã kết nối.
-   */
   async function init() {
     const status = await api.get('/api/status');
     if (status.data?.connected) {
