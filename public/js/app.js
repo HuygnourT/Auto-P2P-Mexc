@@ -43,8 +43,11 @@ const App = (() => {
     myAdsPage: { current: 1, total: 1 },
 
     // ── Auto-pricer state ──
-    myAdvNos: new Set(),   // advNo của ads của mình, để bỏ qua khi tìm giá thị trường
-    apConfigs: {},         // { [advNo]: { enabled, amount, ... } } — persist qua re-render
+    myAdvNos: new Set(),
+    apConfigs: {},
+
+    // ★ MỚI: Whitelist thương nhân — bỏ qua khi tìm giá tốt nhất
+    whitelist: [],
   };
 
   // Timer auto-refresh (handle của setInterval)
@@ -52,7 +55,6 @@ const App = (() => {
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
-    /** Gửi POST request với body JSON */
     async post(url, data) {
       const res = await fetch(url, {
         method: 'POST',
@@ -61,22 +63,114 @@ const App = (() => {
       });
       return res.json();
     },
-
-    /** Gửi GET request */
     async get(url) {
       const res = await fetch(url);
       return res.json();
     },
   };
 
-  // ─── Kết nối / Ngắt kết nối ──────────────────────────
+  // ═══════════════════════════════════════════════════════
+  // ★ MỚI: WHITELIST THƯƠNG NHÂN
+  // ═══════════════════════════════════════════════════════
 
   /**
-   * Kết nối đến MEXC API.
-   * Lấy apiKey, secretKey, apiHost từ form input,
-   * gửi POST /api/connect để backend tạo service instance.
-   * Nếu thành công, tự động load My Ads + Market Ads.
+   * Lấy whitelist từ server và lưu vào state.
    */
+  async function loadWhitelist() {
+    try {
+      const result = await api.get('/api/whitelist');
+      if (result.code === 0) {
+        state.whitelist = result.data || [];
+        renderWhitelist();
+      }
+    } catch (err) {
+      console.error('[Whitelist] Load error:', err);
+    }
+  }
+
+  /**
+   * Thêm thương nhân vào whitelist.
+   * Đọc tên từ input #wlInput, gửi POST /api/whitelist/add.
+   */
+  async function addWhitelistMerchant() {
+    const input = document.getElementById('wlInput');
+    const name = (input.value || '').trim();
+    if (!name) {
+      showToast('Vui lòng nhập tên thương nhân', 'error');
+      return;
+    }
+
+    // Kiểm tra trùng phía client
+    if (state.whitelist.some(m => m.toLowerCase() === name.toLowerCase())) {
+      showToast('Thương nhân đã có trong whitelist', 'info');
+      input.value = '';
+      return;
+    }
+
+    try {
+      const result = await api.post('/api/whitelist/add', { name });
+      if (result.code === 0) {
+        state.whitelist = result.data;
+        renderWhitelist();
+        input.value = '';
+        showToast(`Đã thêm "${name}" vào whitelist`, 'success');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'error');
+    }
+  }
+
+  /**
+   * Xóa thương nhân khỏi whitelist.
+   * @param {string} name - Tên thương nhân cần xóa
+   */
+  async function removeWhitelistMerchant(name) {
+    try {
+      const result = await api.post('/api/whitelist/remove', { name });
+      if (result.code === 0) {
+        state.whitelist = result.data;
+        renderWhitelist();
+        showToast(`Đã xóa "${name}" khỏi whitelist`, 'info');
+      }
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'error');
+    }
+  }
+
+  /**
+   * Render danh sách whitelist dưới dạng chip tags.
+   */
+  function renderWhitelist() {
+    const container = document.getElementById('wlChips');
+    const countEl = document.getElementById('wlCount');
+    if (!container) return;
+
+    // Cập nhật counter
+    if (countEl) {
+      countEl.textContent = state.whitelist.length > 0
+        ? `${state.whitelist.length} thương nhân`
+        : '';
+    }
+
+    if (state.whitelist.length === 0) {
+      container.innerHTML = '<span class="wl-empty" id="wlEmpty">Chưa có thương nhân nào trong whitelist</span>';
+      return;
+    }
+
+    container.innerHTML = state.whitelist.map(name => {
+      // Escape tên cho attribute onclick
+      const escaped = escapeHtml(name);
+      const escapedAttr = escaped.replace(/'/g, "\\'");
+      return `
+        <span class="wl-chip">
+          <span class="wl-chip-name">${escaped}</span>
+          <button class="wl-chip-remove" onclick="App.removeWhitelistMerchant('${escapedAttr}')" title="Xóa khỏi whitelist">&times;</button>
+        </span>`;
+    }).join('');
+  }
+
+  // ─── Kết nối / Ngắt kết nối ──────────────────────────
+
   async function connect() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const secretKey = document.getElementById('secretKey').value.trim();
@@ -226,7 +320,6 @@ const App = (() => {
     setMyAdsLoading(true);
 
     try {
-      // Gọi API lấy ads với advStatus=OPEN,CLOSE (tất cả trạng thái)
       const result = await api.get(
         `/api/my/ads?merchantId=27939138&advStatus=`
       );
@@ -378,7 +471,6 @@ const App = (() => {
     chips.forEach(chip => {
       const filter = chip.dataset.filter;
       const count = filter === 'ALL' ? all : filter === 'OPEN' ? open : closed;
-      // Chỉ thêm counter nếu đã kết nối và có data
       if (state.connected && all > 0) {
         const label = chip.textContent.replace(/\s*\(\d+\)/, '').trim();
         chip.textContent = `${label} (${count})`;
@@ -1017,6 +1109,9 @@ const App = (() => {
    *   - filterMaxSingleTransAmount: bỏ qua ads có maxSingleTransAmount lớn hơn ngưỡng
    *   - limit: trần (BUY) hoặc sàn (SELL) — ads vượt khỏi limit sẽ bị bỏ qua
    *
+   * ★ MỚI: Thêm lọc theo whitelist — bỏ qua ads có ad.merchant.nickName
+   *   nằm trong state.whitelist (so sánh case-insensitive).
+   *
    * Bỏ qua ads của chính mình (state.myAdvNos).
    * BUY → giá cao nhất; SELL → giá thấp nhất.
    *
@@ -1033,7 +1128,10 @@ const App = (() => {
     let page = 1;
     let bestPrice = null;
 
-    while (page <= 5) {
+    // ★ MỚI: Chuẩn bị whitelist set để tra cứu nhanh (lowercase)
+    const whitelistSet = new Set(state.whitelist.map(n => n.toLowerCase()));
+
+    while (page <= 10) {
       const amountParam = amount > 0 ? `&amount=${amount}` : '';
       const result = await api.get(
         `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN${amountParam}`
@@ -1050,24 +1148,27 @@ const App = (() => {
         const price = parseFloat(ad.price);
         if (isNaN(price)) continue;
 
+        // ★ MỚI: Bỏ qua thương nhân trong whitelist
+        const merchantName = (ad.merchant?.nickName || '').toLowerCase();
+        if (merchantName && whitelistSet.has(merchantName)) {
+          continue;
+        }
+
         // Lọc online
         if (extraFilters.onlineMinutes > 0) {
           const lastOnline = ad.merchant?.lastOnlineTime;
           if (!lastOnline || (now - lastOnline) / 60000 > extraFilters.onlineMinutes) continue;
         }
 
-        if (ad.userAllTradeCountMin < extraFilters.userAllTradeCountMin)
-        {
+        if (extraFilters.userAllTradeCountMin > 0 && ad.userAllTradeCountMin < extraFilters.userAllTradeCountMin) {
           continue;
         }
 
-        if (ad.userAllTradeCountMax < extraFilters.userAllTradeCountMax)
-        {
+        if (extraFilters.userAllTradeCountMax > 0 && ad.userAllTradeCountMax < extraFilters.userAllTradeCountMax) {
           continue;
         }
 
-        if (ad.maxSingleTransAmount < extraFilters.maxSingleTransAmount)
-        {
+        if (extraFilters.maxSingleTransAmount > 0 && ad.maxSingleTransAmount < extraFilters.maxSingleTransAmount) {
           continue;
         }
 
@@ -1081,8 +1182,6 @@ const App = (() => {
         }
       }
 
-      const totalPages = result.page?.totalPage || 1;
-      if (page >= totalPages) break;
       page++;
     }
 
@@ -1112,14 +1211,13 @@ const App = (() => {
         const bestPrice = await apFindBestPrice(
           side,
           parseFloat(cfg.amount) || 0,
-          
           fiat,
           cfg.priceLimit,
           {
-            onlineMinutes : cfg.onlineMinutes || 0,
-            userAllTradeCountMin: cfg.userAllTradeCountMin || 0,//cfg.userAllTradeCountMin,
-            userAllTradeCountMax: cfg.userAllTradeCountMax || 0,//cfg.userAllTradeCountMax,
-            maxSingleTransAmount: cfg.filterMaxSingleTransAmount || 0,//cfg.filterMaxSingleTransAmount,
+            onlineMinutes: cfg.onlineMinutes || 0,
+            userAllTradeCountMin: cfg.userAllTradeCountMin || 0,
+            userAllTradeCountMax: cfg.userAllTradeCountMax || 0,
+            maxSingleTransAmount: cfg.filterMaxSingleTransAmount || 0,
           }
         );
         console.log("apRunCycle best price " + bestPrice);
@@ -1304,6 +1402,9 @@ const App = (() => {
   // ─── Khởi tạo ────────────────────────────────────────
 
   async function init() {
+    // ★ MỚI: Load whitelist ngay khi khởi động (không cần kết nối)
+    await loadWhitelist();
+
     const status = await api.get('/api/status');
     if (status.data?.connected) {
       state.connected = true;
@@ -1350,6 +1451,9 @@ const App = (() => {
     apToggle,
     apSetCfg,
     clearAutoPricerLog,
+    // ★ MỚI: Whitelist functions
+    addWhitelistMerchant,
+    removeWhitelistMerchant,
   };
 })();
 

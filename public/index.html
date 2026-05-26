@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MEXC P2P System</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/whitelist.css"><!-- ★ MỚI -->
 </head>
 <body>
 
@@ -147,6 +148,31 @@
         </table>
       </div>
       <div class="pagination" id="myAdsPagination"></div>
+    </div>
+
+    <!-- ★ MỚI: CARD WHITELIST THƯƠNG NHÂN -->
+    <div class="card" id="whitelistCard">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        Whitelist thương nhân
+        <span class="card-subtitle">Bỏ qua không xét giá của các thương nhân này khi auto-pricer tìm giá</span>
+        <span class="wl-count" id="wlCount"></span>
+      </div>
+      <div class="wl-container">
+        <div class="wl-input-row">
+          <input type="text" id="wlInput" placeholder="Nhập tên thương nhân (nickName)..." spellcheck="false"
+                 onkeydown="if(event.key==='Enter') App.addWhitelistMerchant()">
+          <button class="btn btn-primary btn-sm" onclick="App.addWhitelistMerchant()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14m-7-7h14"/></svg>
+            Thêm
+          </button>
+        </div>
+        <div class="wl-chips" id="wlChips">
+          <span class="wl-empty" id="wlEmpty">Chưa có thương nhân nào trong whitelist</span>
+        </div>
+      </div>
     </div>
 
     <!-- CARD: TỰ ĐỘNG CHỈNH GIÁ -->

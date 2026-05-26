@@ -1,0 +1,88 @@
+/* ═══════════════════════════════════════════════════════
+   WHITELIST — Danh sách thương nhân bỏ qua
+   ═══════════════════════════════════════════════════════ */
+
+.wl-container {
+  margin-top: 4px;
+}
+
+.wl-input-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.wl-input-row input {
+  flex: 1;
+  font-size: 13px;
+  padding: 8px 14px;
+}
+
+.wl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.wl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  animation: chipIn 0.2s ease;
+}
+
+@keyframes chipIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.wl-chip:hover {
+  border-color: var(--red);
+  background: var(--red-bg);
+}
+
+.wl-chip-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.wl-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.wl-chip-remove:hover {
+  color: var(--red);
+}
+
+.wl-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.wl-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const MexcP2PService = require('../services/mexcP2P');
+const whitelist = require('../services/whitelist');          // ★ MỚI
 const logger = require('../utils/logger');
 const config = require('../config');
 
@@ -128,6 +129,47 @@ function requireSecondaryConnection(_req, res, next) {
   }
   next();
 }
+
+// ══════════════════════════════════════════════════════
+// ★ MỚI: WHITELIST — Danh sách thương nhân bỏ qua
+// ══════════════════════════════════════════════════════
+
+/**
+ * GET /api/whitelist
+ * Lấy danh sách whitelist hiện tại.
+ */
+router.get('/whitelist', (_req, res) => {
+  const merchants = whitelist.getWhitelist();
+  res.json({ code: 0, data: merchants });
+});
+
+/**
+ * POST /api/whitelist/add
+ * Thêm thương nhân vào whitelist.
+ * Body: { name: "TenThuongNhan" }
+ */
+router.post('/whitelist/add', (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ code: -1, msg: 'name is required' });
+  }
+  const merchants = whitelist.addMerchant(name);
+  res.json({ code: 0, data: merchants });
+});
+
+/**
+ * POST /api/whitelist/remove
+ * Xóa thương nhân khỏi whitelist.
+ * Body: { name: "TenThuongNhan" }
+ */
+router.post('/whitelist/remove', (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ code: -1, msg: 'name is required' });
+  }
+  const merchants = whitelist.removeMerchant(name);
+  res.json({ code: 0, data: merchants });
+});
 
 // ══════════════════════════════════════════════════════
 // MARKET ADS — dùng kết nối PHỤ
