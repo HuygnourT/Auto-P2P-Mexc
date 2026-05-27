@@ -52,6 +52,8 @@ const App = (() => {
 
   // Timer auto-refresh (handle của setInterval)
   let autoRefreshTimer = null;
+  let bnPriceTimer = null;
+  let bnCountdown = 60;
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
@@ -167,6 +169,34 @@ const App = (() => {
           <button class="wl-chip-remove" onclick="App.removeWhitelistMerchant('${escapedAttr}')" title="Xóa khỏi whitelist">&times;</button>
         </span>`;
     }).join('');
+  }
+
+  async function loadBinancePrice() {
+    try {
+      const result = await api.get('/api/binance/price');
+      if (result.code === 0 && result.data.price) {
+        document.getElementById('bnPriceValue').textContent = formatNumber(result.data.price);
+        const time = result.data.lastUpdated
+          ? new Date(result.data.lastUpdated).toLocaleTimeString('vi-VN')
+          : '—';
+        document.getElementById('bnPriceTime').textContent = `Cập nhật: ${time}`;
+        bnCountdown = 60;
+      }
+    } catch (err) {
+      console.error('[BinancePrice]', err);
+    }
+  }
+
+  function startBinancePricePolling() {
+    loadBinancePrice();
+    bnPriceTimer = setInterval(() => {
+      bnCountdown--;
+      const el = document.getElementById('bnPriceCountdown');
+      if (el) el.textContent = `${bnCountdown}s`;
+      if (bnCountdown <= 0) {
+        loadBinancePrice();
+      }
+    }, 1000);
   }
 
   // ─── Kết nối / Ngắt kết nối ──────────────────────────
@@ -1404,6 +1434,8 @@ const App = (() => {
   async function init() {
     // ★ MỚI: Load whitelist ngay khi khởi động (không cần kết nối)
     await loadWhitelist();
+
+    startBinancePricePolling();
 
     const status = await api.get('/api/status');
     if (status.data?.connected) {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const MexcP2PService = require('../services/mexcP2P');
 const whitelist = require('../services/whitelist');          // ★ MỚI
+const binancePrice = require('../services/binancePrice');
 const logger = require('../utils/logger');
 const config = require('../config');
 
@@ -169,6 +170,10 @@ router.post('/whitelist/remove', (req, res) => {
   }
   const merchants = whitelist.removeMerchant(name);
   res.json({ code: 0, data: merchants });
+});
+
+router.get('/binance/price', (_req, res) => {
+  res.json({ code: 0, data: binancePrice.getPrice() });
 });
 
 // ══════════════════════════════════════════════════════

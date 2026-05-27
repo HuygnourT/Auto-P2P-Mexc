@@ -5,6 +5,7 @@ const config = require('./config');
 const apiRoutes = require('./routes/api');
 const rateLimiter = require('./middleware/rateLimiter');
 const logger = require('./utils/logger');
+const binancePrice = require('./services/binancePrice');
 
 const app = express();
 
@@ -42,6 +43,8 @@ app.get('/api/config', (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
+
+binancePrice.startPolling(60000);
 
 // ── Khởi động server ──
 app.listen(config.port, () => {
