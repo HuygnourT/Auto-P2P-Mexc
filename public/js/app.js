@@ -21,19 +21,15 @@ const App = (() => {
     sellAdsRaw: [],
     buyAds: [],
     sellAds: [],
-    // startPage: trang API đầu tiên của batch hiện tại
-    // fetchedUpTo: trang API cuối cùng đã fetch trong batch
-    // total: tổng số trang API
-    // history: stack startPage của các batch trước (để "Prev" quay lại)
     buyPage: { startPage: 1, fetchedUpTo: 1, total: 1, history: [] },
     sellPage: { startPage: 1, fetchedUpTo: 1, total: 1, history: [] },
     fiatUnit: 'VND',
 
     // ── Bộ lọc Market Ads ──
     marketFilters: {
-      onlineMinutes: 0,   // 0 = không lọc; >0 = merchant phải online trong X phút gần đây
-      amount: 0,          // 0 = không lọc; >0 = số lượng phải nằm trong giới hạn merchant
-      autoRefreshSec: 0,  // 0 = tắt; >0 = tự động làm mới mỗi X giây
+      onlineMinutes: 0,
+      amount: 0,
+      autoRefreshSec: 0,
     },
 
     // ── My Ads state ──
@@ -48,12 +44,22 @@ const App = (() => {
 
     // ★ MỚI: Whitelist thương nhân — bỏ qua khi tìm giá tốt nhất
     whitelist: [],
+
+    // ★ MỚI: Bitget P2P
+    bgConnected: false,
+    bgAds: [],
+    bgApConfigs: {},
   };
 
   // Timer auto-refresh (handle của setInterval)
   let autoRefreshTimer = null;
+
+  // ★ MỚI: Binance price polling
   let bnPriceTimer = null;
   let bnCountdown = 60;
+
+  // ★ MỚI: Bitget auto-pricer timer
+  let bgApTimer = null;
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
@@ -171,6 +177,10 @@ const App = (() => {
     }).join('');
   }
 
+  // ═══════════════════════════════════════════════════════
+  // ★ MỚI: BINANCE PRICE — Hiển thị giá từ pricedancing.com
+  // ═══════════════════════════════════════════════════════
+
   async function loadBinancePrice() {
     try {
       const result = await api.get('/api/binance/price');
@@ -199,6 +209,230 @@ const App = (() => {
     }, 1000);
   }
 
+  // ═══════════════════════════════════════════════════════
+  // ★ MỚI: BITGET P2P
+  // ═══════════════════════════════════════════════════════
+
+  async function connectBitget() {
+    const apiKey = document.getElementById('bgApiKey').value.trim();
+    const secretKey = document.getElementById('bgSecretKey').value.trim();
+    const passphrase = document.getElementById('bgPassphrase').value.trim();
+    if (!apiKey || !secretKey || !passphrase) {
+      showToast('Nhập đầy đủ API Key, Secret Key, Passphrase Bitget', 'error'); return;
+    }
+    setLoading(true, 'bgConnectBtn');
+    try {
+      const r = await api.post('/api/bitget/connect', { apiKey, secretKey, passphrase });
+      if (r.code === 0) {
+        state.bgConnected = true;
+        updateBgConnectionUI(true);
+        showToast('Bitget kết nối thành công!', 'success');
+        await loadBitgetAds();
+      } else {
+        showToast(r.msg || 'Bitget kết nối thất bại', 'error');
+      }
+    } catch (err) { showToast('Lỗi: ' + err.message, 'error'); }
+    finally { setLoading(false, 'bgConnectBtn'); }
+  }
+
+  async function disconnectBitget() {
+    await api.post('/api/bitget/disconnect');
+    state.bgConnected = false;
+    state.bgAds = [];
+    state.bgApConfigs = {};
+    if (bgApTimer) { clearInterval(bgApTimer); bgApTimer = null; }
+    updateBgConnectionUI(false);
+    renderBgAdsTable();
+    renderBgApTable();
+    showToast('Đã ngắt Bitget', 'info');
+  }
+
+  function updateBgConnectionUI(connected) {
+    document.getElementById('bgStatusDot').className = 'status-dot' + (connected ? ' connected' : '');
+    document.getElementById('bgStatusText').textContent = connected ? 'Đã kết nối' : 'Chưa kết nối';
+    document.getElementById('bgConnectBtn').style.display = connected ? 'none' : 'inline-flex';
+    document.getElementById('bgDisconnectBtn').style.display = connected ? 'inline-flex' : 'none';
+    if (connected) document.getElementById('bgCredentials').classList.add('locked');
+    else document.getElementById('bgCredentials').classList.remove('locked');
+  }
+
+  async function loadBitgetAds() {
+    if (!state.bgConnected) return;
+    try {
+      const r = await api.get('/api/bitget/ads?limit=20');
+      if (r.code === '00000') {
+        state.bgAds = r.data?.advList || [];
+        renderBgAdsTable();
+        renderBgApTable();
+      }
+    } catch (err) { showToast('Lỗi Bitget: ' + err.message, 'error'); }
+  }
+
+  function renderBgAdsTable() {
+    const tbody = document.getElementById('bgAdsTableBody');
+    if (!tbody) return;
+    if (!state.bgAds.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Không có quảng cáo</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.bgAds.map(ad => {
+      const isBuy = ad.type === 'buy';
+      const isOnline = ad.status === 'online';
+      return `<tr class="ad-row ${isOnline ? '' : 'ad-closed'}">
+        <td class="mono-cell">${truncateId(ad.advNo || ad.advId || '')}</td>
+        <td><span class="side-badge ${isBuy ? 'side-buy' : 'side-sell'}">${isBuy ? 'MUA' : 'BÁN'}</span></td>
+        <td><span class="status-badge ${isOnline ? 'status-open' : 'status-closed'}"><span class="status-indicator"></span>${isOnline ? 'Online' : 'Offline'}</span></td>
+        <td>${ad.coin || 'USDT'}</td>
+        <td class="mono-cell price-value ${isBuy ? 'price-buy' : 'price-sell'}">${formatNumber(ad.price)}</td>
+        <td class="mono-cell">${formatNumber(ad.amount)}</td>
+        <td class="mono-cell">${formatNumber(ad.minAmount)} - ${formatNumber(ad.maxAmount)}</td>
+        <td>${ad.fiatCode || ''}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderBgApTable() {
+    const tbody = document.getElementById('bgApTableBody');
+    if (!tbody) return;
+    if (!state.bgAds.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="ap-empty">Kết nối Bitget để cấu hình</td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.bgAds.filter(a => a.status === 'online').map(ad => {
+      const advKey = ad.advNo || ad.advId || '';
+      if (!state.bgApConfigs[advKey]) {
+        state.bgApConfigs[advKey] = { enabled: false, priceLimit: '', lastStatus: '' };
+      }
+      const c = state.bgApConfigs[advKey];
+      const isBuy = ad.type === 'buy';
+      return `<tr>
+        <td><span class="mono-cell" style="font-size:11px">${truncateId(advKey)}</span>
+            <span class="side-badge ${isBuy ? 'side-buy' : 'side-sell'}" style="font-size:10px;margin-left:6px">${isBuy ? 'BUY' : 'SELL'}</span></td>
+        <td><label class="toggle"><input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="App.bgApToggle('${advKey}',this.checked)"><span class="toggle-slider"></span></label></td>
+        <td><input type="number" class="ap-num-input" value="${c.priceLimit}" placeholder="${isBuy ? 'Trần' : 'Sàn'}" onchange="App.bgApSetLimit('${advKey}',this.value)"></td>
+        <td><span class="ap-row-status" id="bg-status-${advKey}">${c.lastStatus || '—'}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function bgApToggle(advKey, enabled) {
+    if (state.bgApConfigs[advKey]) state.bgApConfigs[advKey].enabled = enabled;
+  }
+  function bgApSetLimit(advKey, val) {
+    if (state.bgApConfigs[advKey]) state.bgApConfigs[advKey].priceLimit = val;
+  }
+
+  function bgLog(msg, type = '') {
+    const log = document.getElementById('bgLog');
+    if (!log) return;
+    const empty = log.querySelector('.ap-log-empty');
+    if (empty) empty.remove();
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    const entry = document.createElement('div');
+    entry.className = 'ap-log-entry';
+    entry.innerHTML = `<span class="ap-log-time">${time}</span><span class="ap-log-msg ${type}">${escapeHtml(msg)}</span>`;
+    log.insertBefore(entry, log.firstChild);
+    while (log.children.length > 100) log.removeChild(log.lastChild);
+  }
+
+  async function bgRunCycle() {
+    if (!state.bgAds.length) return;
+    const offsetBuy = parseFloat(document.getElementById('bgOffsetBuy').value) || -50;
+    const offsetSell = parseFloat(document.getElementById('bgOffsetSell').value) || 50;
+
+    for (const ad of state.bgAds) {
+      const advKey = ad.advNo || ad.advId || '';
+      const cfg = state.bgApConfigs[advKey];
+      if (!cfg || !cfg.enabled || ad.status !== 'online') continue;
+
+      const isBuy = ad.type === 'buy';
+      const statusEl = document.getElementById(`bg-status-${advKey}`);
+
+      try {
+        if (statusEl) { statusEl.textContent = 'Đang quét...'; statusEl.className = 'ap-row-status'; }
+
+        // Lấy giá Binance hiện tại từ card bnPriceValue
+        const bnPriceEl = document.getElementById('bnPriceValue');
+        const bnPriceText = bnPriceEl ? bnPriceEl.textContent.replace(/[.,\s]/g, '') : '';
+        const bnPrice = parseFloat(bnPriceText);
+
+        if (!bnPrice || bnPrice < 100) {
+          if (statusEl) { statusEl.textContent = 'Chờ giá Binance'; statusEl.className = 'ap-row-status warn'; }
+          bgLog(`[${truncateId(advKey)}] Chưa có giá Binance`, 'warn');
+          continue;
+        }
+
+        // Tính giá mới = giá Binance + offset
+        let newPrice = isBuy ? bnPrice + offsetBuy : bnPrice + offsetSell;
+
+        // Áp trần/sàn
+        if (cfg.priceLimit) {
+          const lim = parseFloat(cfg.priceLimit);
+          if (isBuy && newPrice > lim) newPrice = lim;
+          if (!isBuy && newPrice < lim) newPrice = lim;
+        }
+
+        newPrice = Math.round(newPrice);
+        const currentPrice = parseFloat(ad.price);
+
+        if (newPrice === currentPrice) {
+          if (statusEl) { statusEl.textContent = `Giá OK: ${formatNumber(currentPrice)}`; statusEl.className = 'ap-row-status ok'; }
+          continue;
+        }
+
+        // Gọi Bitget Update Ad API
+        const payload = {
+          advNo: ad.advNo || ad.advId,
+          price: String(newPrice),
+          coin: ad.coin || 'USDT',
+          fiatCode: ad.fiatCode || 'VND',
+          type: ad.type,
+          amount: ad.amount,
+          minAmount: ad.minAmount,
+          maxAmount: ad.maxAmount,
+          status: 'online',
+        };
+
+        const result = await api.post('/api/bitget/ads/update', payload);
+
+        if (result.code === '00000') {
+          ad.price = String(newPrice);
+          if (statusEl) { statusEl.textContent = `→ ${formatNumber(newPrice)}`; statusEl.className = 'ap-row-status ok'; }
+          bgLog(`[${truncateId(advKey)}] ${ad.type.toUpperCase()} | Binance: ${formatNumber(bnPrice)} → Mới: ${formatNumber(newPrice)}`, 'success');
+          cfg.lastStatus = `→ ${formatNumber(newPrice)}`;
+        } else {
+          if (statusEl) { statusEl.textContent = `Lỗi: ${result.msg}`; statusEl.className = 'ap-row-status err'; }
+          bgLog(`[${truncateId(advKey)}] Lỗi: ${result.msg}`, 'error');
+        }
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = `Lỗi: ${err.message}`; statusEl.className = 'ap-row-status err'; }
+        bgLog(`[${truncateId(advKey)}] ${err.message}`, 'error');
+      }
+    }
+  }
+
+  function startBitgetPricer() {
+    if (bgApTimer) return;
+    const interval = Math.max(5, parseInt(document.getElementById('bgScanInterval').value) || 30) * 1000;
+    document.getElementById('bgApBadge').textContent = '▶ Đang chạy';
+    document.getElementById('bgApBadge').className = 'ap-status-badge running';
+    document.getElementById('bgStartBtn').style.display = 'none';
+    document.getElementById('bgStopBtn').style.display = 'inline-flex';
+    bgLog(`Bitget auto-pricer bắt đầu — quét mỗi ${interval / 1000}s`, 'success');
+    bgRunCycle();
+    bgApTimer = setInterval(bgRunCycle, interval);
+  }
+
+  function stopBitgetPricer() {
+    if (bgApTimer) { clearInterval(bgApTimer); bgApTimer = null; }
+    document.getElementById('bgApBadge').textContent = '⏹ Đã dừng';
+    document.getElementById('bgApBadge').className = 'ap-status-badge stopped';
+    document.getElementById('bgStartBtn').style.display = 'inline-flex';
+    document.getElementById('bgStopBtn').style.display = 'none';
+    bgLog('Bitget auto-pricer đã dừng', 'warn');
+  }
+
   // ─── Kết nối / Ngắt kết nối ──────────────────────────
 
   async function connect() {
@@ -219,7 +453,6 @@ const App = (() => {
         state.connected = true;
         updateConnectionUI(true, apiHost);
         showToast('Kết nối thành công!', 'success');
-        // Tự động tải tất cả dữ liệu sau khi kết nối
         await loadMyAds();
         await loadMarketAds('BUY');
         await loadMarketAds('SELL');
@@ -233,10 +466,6 @@ const App = (() => {
     }
   }
 
-  /**
-   * Ngắt kết nối API.
-   * Gọi POST /api/disconnect, xóa toàn bộ dữ liệu, cập nhật giao diện.
-   */
   async function disconnect() {
     await api.post('/api/disconnect');
     state.connected = false;
@@ -253,12 +482,6 @@ const App = (() => {
 
   // ─── Kết nối phụ ─────────────────────────────────────
 
-  /**
-   * Kết nối API phụ dùng để lấy Market Ads.
-   * Lấy apiKey2, secretKey2, apiHost2 từ form input,
-   * gửi POST /api/connect/secondary.
-   * Nếu thành công, tự động load Market Ads.
-   */
   async function connectSecondary() {
     const apiKey = document.getElementById('apiKey2').value.trim();
     const secretKey = document.getElementById('secretKey2').value.trim();
@@ -289,10 +512,6 @@ const App = (() => {
     }
   }
 
-  /**
-   * Ngắt kết nối API phụ.
-   * Xóa dữ liệu Market Ads và cập nhật giao diện.
-   */
   async function disconnectSecondary() {
     await api.post('/api/disconnect/secondary');
     state.secondaryConnected = false;
@@ -307,11 +526,6 @@ const App = (() => {
     showToast('Đã ngắt kết nối phụ', 'info');
   }
 
-  /**
-   * Cập nhật giao diện card kết nối phụ.
-   * @param {boolean} connected - Trạng thái kết nối phụ
-   * @param {string} host - Tên host đang kết nối
-   */
   function updateSecondaryConnectionUI(connected, host) {
     const statusDot = document.getElementById('secondaryStatusDot');
     const statusText = document.getElementById('secondaryStatusText');
@@ -338,12 +552,6 @@ const App = (() => {
   // MY ADS — Quảng cáo của tôi
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * Lấy tất cả quảng cáo của bản thân từ API.
-   * Gọi 2 lần: 1 lần lấy ads OPEN, 1 lần lấy ads CLOSE.
-   * Gộp kết quả lại để hiển thị đầy đủ cả 2 trạng thái.
-   * @param {number} page - Số trang (mặc định 1)
-   */
   async function loadMyAds(_page = 1) {
     if (!state.connected) return;
 
@@ -362,11 +570,8 @@ const App = (() => {
           current: result.page?.currPage || 1,
           total: result.page?.totalPage || 1,
         };
-        // Lưu advNo của mình để auto-pricer bỏ qua khi quét thị trường
         state.myAdvNos = new Set(state.myAds.map(a => a.advNo || a.davNo || '').filter(Boolean));
-        // Áp dụng filter hiện tại
         applyMyAdsFilter();
-        // Cập nhật bảng cấu hình auto-pricer
         renderAutoPricerTable();
       } else {
         showToast(`Lỗi lấy ads cá nhân: ${result.msg}`, 'error');
@@ -378,31 +583,18 @@ const App = (() => {
     }
   }
 
-  /**
-   * Lọc danh sách My Ads theo trạng thái (ALL / OPEN / CLOSE).
-   * Cập nhật state.myAdsFiltered rồi render lại bảng.
-   * @param {string} filter - 'ALL', 'OPEN', hoặc 'CLOSE'
-   */
   function filterMyAds(filter) {
     state.myAdsFilter = filter;
-
-    // Cập nhật UI filter chips
     document.querySelectorAll('.filter-chip').forEach(chip => {
       chip.classList.toggle('active', chip.dataset.filter === filter);
     });
-
     applyMyAdsFilter();
   }
 
-  /**
-   * Áp dụng bộ lọc hiện tại lên danh sách My Ads.
-   * Lọc từ state.myAds → state.myAdsFiltered, rồi render bảng.
-   */
   function applyMyAdsFilter() {
     if (state.myAdsFilter === 'ALL') {
       state.myAdsFiltered = [...state.myAds];
     } else {
-      // So sánh advStatus (có thể là "open", "OPEN", "close", "CLOSE")
       state.myAdsFiltered = state.myAds.filter(ad => {
         const status = (ad.advStatus || '').toUpperCase();
         return status === state.myAdsFilter;
@@ -411,17 +603,11 @@ const App = (() => {
     renderMyAdsTable();
   }
 
-  /**
-   * Render bảng quảng cáo cá nhân (My Ads).
-   * Hiển thị: mã QC, loại (BUY/SELL), trạng thái, coin, giá,
-   * số lượng khả dụng/tổng, giới hạn, fiat, thanh toán, ngày tạo.
-   */
   function renderMyAdsTable() {
     const ads = state.myAdsFiltered;
     const container = document.getElementById('myAdsTableBody');
     if (!container) return;
 
-    // Cập nhật counter trên filter chips
     updateMyAdsCounters();
 
     if (!ads || ads.length === 0) {
@@ -443,11 +629,7 @@ const App = (() => {
       const isOpen = (ad.advStatus || '').toUpperCase() === 'OPEN';
       const isBuy = (ad.side || '').toUpperCase() === 'BUY';
       const createdDate = ad.createTime ? formatDate(ad.createTime) : '—';
-
-      // Tính số lượng: quantity = initAmount / price
       const quantity = ad.quantity || (ad.initAmount && ad.price ? (ad.initAmount / ad.price).toFixed(4) : '—');
-
-      // Lấy tên payment methods từ paymentInfo array
       const paymentNames = (ad.paymentInfo || [])
         .map(p => p.bankName || getPayMethodName(String(p.payMethod)))
         .join(', ') || getPayMethodName(ad.payMethod);
@@ -488,10 +670,6 @@ const App = (() => {
     }).join('');
   }
 
-  /**
-   * Cập nhật số lượng ads trên mỗi filter chip.
-   * Ví dụ: "Tất cả (5)", "Đang mở (3)", "Đã đóng (2)"
-   */
   function updateMyAdsCounters() {
     const all = state.myAds.length;
     const open = state.myAds.filter(a => (a.advStatus || '').toUpperCase() === 'OPEN').length;
@@ -508,20 +686,12 @@ const App = (() => {
     });
   }
 
-  /**
-   * Bật/tắt loading overlay cho bảng My Ads.
-   * @param {boolean} loading - true = đang tải
-   */
   function setMyAdsLoading(loading) {
     const wrapper = document.getElementById('myAdsTableWrapper');
     if (!wrapper) return;
     wrapper.classList.toggle('my-ads-loading', loading);
   }
 
-  /**
-   * Chuyển trang cho My Ads.
-   * @param {number} direction - +1 (trang sau) hoặc -1 (trang trước)
-   */
   async function changeMyAdsPage(direction) {
     const newPage = state.myAdsPage.current + direction;
     if (newPage < 1 || newPage > state.myAdsPage.total) return;
@@ -532,14 +702,6 @@ const App = (() => {
   // MARKET ADS — Quảng cáo trên thị trường
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * Lấy danh sách quảng cáo từ market theo side (BUY/SELL).
-   * Tự động lấy thêm trang tiếp theo nếu số lượng sau lọc < MIN_FILTERED,
-   * cho đến khi đủ MIN_FILTERED hoặc đến trang cuối.
-   * @param {string} side - 'BUY' hoặc 'SELL'
-   * @param {number} startPage - Trang API bắt đầu của batch này (mặc định 1)
-   * @param {boolean} pushHistory - Lưu startPage cũ vào history (để Prev hoạt động)
-   */
   async function loadMarketAds(side, startPage = 1, pushHistory = false) {
     if (!state.secondaryConnected) return;
 
@@ -553,7 +715,6 @@ const App = (() => {
     setTableLoading(tabKey, true);
 
     try {
-      // Lưu startPage hiện tại vào history nếu đang đi tới
       if (pushHistory) {
         pageState.history.push(pageState.startPage);
       }
@@ -562,7 +723,6 @@ const App = (() => {
       let currentPage = startPage;
       let totalPages = 1;
 
-      // Loop lấy từng trang cho đến khi đủ MIN_FILTERED ads (sau lọc) hoặc hết trang
       do {
         const result = await api.get(
           `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${currentPage}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN`
@@ -577,17 +737,14 @@ const App = (() => {
         totalPages = result.page?.totalPage || 1;
         accumulatedRaw = accumulatedRaw.concat(pageData);
 
-        // Áp dụng filter trên toàn bộ dữ liệu đã gom
         state[`${tabKey}AdsRaw`] = accumulatedRaw;
         applyMarketFilters(tabKey);
 
-        // Đủ ads hoặc đã tới trang cuối thì dừng
         if (state[`${tabKey}Ads`].length >= MIN_FILTERED || currentPage >= totalPages) break;
 
         currentPage++;
       } while (true);
 
-      // Cập nhật page state: giữ nguyên history, chỉ cập nhật các trường khác
       state[`${tabKey}Page`] = {
         history: pageState.history,
         startPage,
@@ -603,11 +760,6 @@ const App = (() => {
     }
   }
 
-  /**
-   * Áp dụng bộ lọc client-side lên raw ads của một tab.
-   * Lọc theo: online trong X phút, số lượng nằm trong giới hạn merchant.
-   * @param {string} tabKey - 'buy' hoặc 'sell'
-   */
   function applyMarketFilters(tabKey) {
     const raw = state[`${tabKey}AdsRaw`] || [];
     const { onlineMinutes, amount } = state.marketFilters;
@@ -616,7 +768,6 @@ const App = (() => {
     state[`${tabKey}Ads`] = raw.filter(ad => {
       const merchant = ad.merchant || {};
 
-      // Điều kiện online: lastOnlineTime phải trong vòng X phút tính từ thời điểm hiện tại
       if (onlineMinutes > 0) {
         const lastOnline = merchant.lastOnlineTime;
         if (!lastOnline) return false;
@@ -624,7 +775,6 @@ const App = (() => {
         if (diffMin > onlineMinutes) return false;
       }
 
-      // Điều kiện số lượng: amount phải nằm trong [minSingleTransAmount, maxSingleTransAmount]
       if (amount > 0) {
         const min = parseFloat(ad.minSingleTransAmount) || 0;
         const max = parseFloat(ad.maxSingleTransAmount) || Infinity;
@@ -635,10 +785,6 @@ const App = (() => {
     });
   }
 
-  /**
-   * Đọc giá trị từ các input filter, cập nhật state.marketFilters,
-   * áp dụng lại filter cho cả 2 tab, và cài đặt lại auto-refresh.
-   */
   function updateMarketFilters() {
     const onlineMinutes = parseFloat(document.getElementById('filterOnlineMinutes').value) || 0;
     const amount = parseFloat(document.getElementById('filterAmount').value) || 0;
@@ -646,18 +792,15 @@ const App = (() => {
 
     state.marketFilters = { onlineMinutes, amount, autoRefreshSec };
 
-    // Cập nhật label đơn vị số lượng theo fiat hiện tại
     const fiat = document.getElementById('fiatFilter')?.value || state.fiatUnit;
     const unitEl = document.getElementById('filterAmountUnit');
     if (unitEl) unitEl.textContent = fiat;
 
-    // Áp dụng filter ngay lên data hiện có rồi render lại
     applyMarketFilters('buy');
     applyMarketFilters('sell');
     renderAdsTable('buy');
     renderAdsTable('sell');
 
-    // Cài đặt auto-refresh
     if (autoRefreshTimer) {
       clearInterval(autoRefreshTimer);
       autoRefreshTimer = null;
@@ -669,15 +812,10 @@ const App = (() => {
       }, autoRefreshSec * 1000);
     }
 
-    // Hiển thị trạng thái filter đang áp dụng
     updateFilterStatus();
-
     showToast('Đã cập nhật thông số', 'success');
   }
 
-  /**
-   * Cập nhật dòng trạng thái hiển thị các filter đang hoạt động.
-   */
   function updateFilterStatus() {
     const el = document.getElementById('filterStatus');
     if (!el) return;
@@ -690,35 +828,22 @@ const App = (() => {
     el.style.display = parts.length > 0 ? 'block' : 'none';
   }
 
-  /**
-   * Làm mới dữ liệu ads của tab đang hiển thị.
-   * Reset history và tải lại từ trang 1.
-   */
   async function refreshAds() {
     const side = state.currentTab === 'buy' ? 'BUY' : 'SELL';
     const tabKey = state.currentTab;
-    // Reset history khi làm mới
     state[`${tabKey}Page`].history = [];
     await loadMarketAds(side, 1, false);
   }
 
-  /**
-   * Chuyển trang (trước/sau) trong danh sách ads.
-   * Trang "sau" bắt đầu từ fetchedUpTo + 1.
-   * Trang "trước" lấy startPage từ history stack.
-   * @param {number} direction - +1 (trang sau) hoặc -1 (trang trước)
-   */
   async function changePage(direction) {
     const tabKey = state.currentTab;
     const pageState = state[`${tabKey}Page`];
     const side = tabKey === 'buy' ? 'BUY' : 'SELL';
 
     if (direction > 0) {
-      // Trang sau: bắt đầu từ trang API tiếp theo chưa fetch
       if (pageState.fetchedUpTo >= pageState.total) return;
       await loadMarketAds(side, pageState.fetchedUpTo + 1, true);
     } else {
-      // Trang trước: lấy startPage cũ từ history
       if (pageState.history.length === 0) return;
       const prevStart = pageState.history.pop();
       await loadMarketAds(side, prevStart, false);
@@ -727,10 +852,6 @@ const App = (() => {
 
   // ─── Render giao diện Market Ads ─────────────────────
 
-  /**
-   * Render bảng danh sách ads (BUY hoặc SELL) vào HTML.
-   * @param {string} tabKey - 'buy' hoặc 'sell'
-   */
   function renderAdsTable(tabKey) {
     const ads = state[`${tabKey}Ads`];
     const container = document.getElementById(`${tabKey}TableBody`);
@@ -802,13 +923,6 @@ const App = (() => {
     updatePagination(tabKey, pageInfo);
   }
 
-  /**
-   * Cập nhật UI phân trang.
-   * Hiển thị range trang API đã fetch (ví dụ "Trang 1–3 / 15")
-   * và số lượng ads sau lọc.
-   * @param {string} tabKey - 'buy' hoặc 'sell'
-   * @param {Object} pageInfo - { startPage, fetchedUpTo, total, history }
-   */
   function updatePagination(tabKey, pageInfo) {
     const el = document.getElementById(`${tabKey}Pagination`);
     if (!el) return;
@@ -817,7 +931,6 @@ const App = (() => {
     const hasNext = pageInfo.fetchedUpTo < pageInfo.total;
     const filteredCount = state[`${tabKey}Ads`].length;
 
-    // Hiển thị "Trang X–Y / Z" nếu fetch nhiều hơn 1 trang, ngược lại "Trang X / Z"
     const pageLabel = pageInfo.startPage < pageInfo.fetchedUpTo
       ? `Trang ${pageInfo.startPage}–${pageInfo.fetchedUpTo} / ${pageInfo.total}`
       : `Trang ${pageInfo.startPage} / ${pageInfo.total}`;
@@ -833,10 +946,6 @@ const App = (() => {
     `;
   }
 
-  /**
-   * Chuyển đổi tab BUY / SELL.
-   * @param {string} tab - 'buy' hoặc 'sell'
-   */
   function switchTab(tab) {
     state.currentTab = tab;
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -847,11 +956,6 @@ const App = (() => {
     });
   }
 
-  /**
-   * Cập nhật giao diện khi trạng thái kết nối thay đổi.
-   * @param {boolean} connected - Trạng thái kết nối
-   * @param {string} host - Tên host đang kết nối
-   */
   function updateConnectionUI(connected, host) {
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
@@ -876,12 +980,6 @@ const App = (() => {
 
   // ─── Hàm tiện ích (Helpers) ──────────────────────────
 
-  /**
-   * Hiển thị toast thông báo ở góc trên phải màn hình.
-   * Tự động biến mất sau 3.5 giây.
-   * @param {string} message - Nội dung thông báo
-   * @param {string} type - Loại: 'success', 'error', hoặc 'info'
-   */
   function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -898,7 +996,6 @@ const App = (() => {
     }, 3500);
   }
 
-  /** Bật/tắt loading cho button */
   function setLoading(loading, btnId) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -906,18 +1003,12 @@ const App = (() => {
     btn.classList.toggle('loading', loading);
   }
 
-  /** Bật/tắt loading overlay cho bảng market ads */
   function setTableLoading(tabKey, loading) {
     const panel = document.getElementById(`${tabKey}Panel`);
     if (!panel) return;
     panel.classList.toggle('table-loading', loading);
   }
 
-  /**
-   * Format số theo kiểu Việt Nam (dấu chấm phân cách hàng nghìn).
-   * @param {number|string} num - Số cần format
-   * @returns {string} Chuỗi đã format
-   */
   function formatNumber(num) {
     if (!num && num !== 0) return '—';
     const n = parseFloat(num);
@@ -925,11 +1016,6 @@ const App = (() => {
     return n.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
   }
 
-  /**
-   * Format timestamp (milliseconds) thành chuỗi ngày giờ.
-   * @param {number} ts - Timestamp dạng milliseconds
-   * @returns {string} Chuỗi "DD/MM/YY HH:mm"
-   */
   function formatDate(ts) {
     const d = new Date(ts);
     const day = String(d.getDate()).padStart(2, '0');
@@ -940,29 +1026,17 @@ const App = (() => {
     return `${day}/${month}/${year} ${hour}:${min}`;
   }
 
-  /**
-   * Rút gọn mã ID dài (advNo) để hiển thị gọn trong bảng.
-   * Ví dụ: "a1375750128856004608" → "a137...4608"
-   * @param {string} id - Mã cần rút gọn
-   * @returns {string} Mã đã rút gọn
-   */
   function truncateId(id) {
     if (!id || id.length <= 12) return id;
     return id.slice(0, 4) + '...' + id.slice(-4);
   }
 
-  /** Escape HTML để tránh XSS */
   function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   }
 
-  /**
-   * Chuyển mã payment method thành tên hiển thị.
-   * @param {string} methodStr - Chuỗi mã (có thể nhiều mã phân tách bởi dấu phẩy)
-   * @returns {string} Tên phương thức thanh toán
-   */
   function getPayMethodName(methodStr) {
     if (!methodStr) return 'N/A';
     const methods = {
@@ -975,12 +1049,10 @@ const App = (() => {
     return methodStr.split(',').map(m => methods[m.trim()] || `PM-${m.trim()}`).join(', ');
   }
 
-  /** Xem chi tiết quảng cáo (placeholder) */
   function viewAd(advNo) {
     showToast(`Chi tiết quảng cáo: ${advNo}`, 'info');
   }
 
-  /** Toggle hiện/ẩn Secret Key input */
   function togglePasswordVisibility(inputId) {
     const input = document.getElementById(inputId);
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -990,12 +1062,8 @@ const App = (() => {
   // AUTO-PRICER — Tự động chỉnh giá
   // ═══════════════════════════════════════════════════════
 
-  let apTimer = null;   // handle setInterval của vòng quét
+  let apTimer = null;
 
-  /**
-   * Render bảng cấu hình auto-pricer.
-   * Mỗi dòng = 1 ad của mình. Giữ nguyên giá trị đã nhập trong state.apConfigs.
-   */
   function renderAutoPricerTable() {
     const tbody = document.getElementById('apTableBody');
     if (!tbody) return;
@@ -1010,7 +1078,6 @@ const App = (() => {
       const advNo = ad.advNo || ad.davNo || '';
       const isBuy = (ad.side || '').toUpperCase() === 'BUY';
 
-      // Giá trị mặc định lần đầu
       if (!state.apConfigs[advNo]) {
         state.apConfigs[advNo] = {
           enabled: false,
@@ -1022,10 +1089,9 @@ const App = (() => {
           refillQuantity: '',
           minTrans: ad.minSingleTransAmount || '',
           maxTrans: ad.maxSingleTransAmount || '',
-          // ── 3 điều kiện lọc mới cho apFindBestPrice ──
-          userAllTradeCountMin: 0,   // Số GD tối thiểu của merchant đối thủ
-          userAllTradeCountMax: 0,   // Số GD tối đa của merchant đối thủ
-          filterMaxSingleTransAmount: 0, // Bỏ qua ads có maxSingleTransAmount > giá trị này
+          userAllTradeCountMin: 0,
+          userAllTradeCountMax: 0,
+          filterMaxSingleTransAmount: 0,
           lastStatus: '',
         };
       }
@@ -1066,24 +1132,20 @@ const App = (() => {
     }).join('');
   }
 
-  /** Bật/tắt từng dòng, không re-render toàn bộ bảng */
   function apToggle(advNo, enabled) {
     if (!state.apConfigs[advNo]) return;
     state.apConfigs[advNo].enabled = enabled;
   }
 
-  /** Cập nhật 1 field config của 1 ad */
   function apSetCfg(advNo, field, value) {
     if (!state.apConfigs[advNo]) return;
     const num = parseFloat(value);
     state.apConfigs[advNo][field] = isNaN(num) ? value : num;
   }
 
-  /** Thêm 1 dòng vào log panel */
   function apLog(msg, type = '') {
     const log = document.getElementById('apLog');
     if (!log) return;
-    // Xóa placeholder nếu còn
     const empty = log.querySelector('.ap-log-empty');
     if (empty) empty.remove();
 
@@ -1092,9 +1154,8 @@ const App = (() => {
     const entry = document.createElement('div');
     entry.className = 'ap-log-entry';
     entry.innerHTML = `<span class="ap-log-time">${time}</span><span class="ap-log-msg ${type}">${escapeHtml(msg)}</span>`;
-    log.insertBefore(entry, log.firstChild);   // mới nhất trên đầu
+    log.insertBefore(entry, log.firstChild);
 
-    // Giới hạn 200 dòng log
     while (log.children.length > 200) log.removeChild(log.lastChild);
   }
 
@@ -1103,7 +1164,6 @@ const App = (() => {
     if (log) log.innerHTML = '<div class="ap-log-empty">Chưa có hoạt động nào</div>';
   }
 
-  /** Cập nhật status badge + nút start/stop */
   function updateApStatusUI(running) {
     const badge = document.getElementById('apStatusBadge');
     const startBtn = document.getElementById('apStartBtn');
@@ -1122,7 +1182,6 @@ const App = (() => {
     }
   }
 
-  /** Cập nhật ô status của 1 dòng */
   function setApRowStatus(advNo, msg, type) {
     const el = document.getElementById(`ap-status-${advNo}`);
     if (!el) return;
@@ -1132,26 +1191,13 @@ const App = (() => {
   }
 
   /**
-   * Lấy giá tốt nhất từ market với các điều kiện lọc:
-   *   - amount: số lượng giao dịch (lọc qua API + client-side)
-   *   - onlineMinutes: merchant phải online trong X phút
-   *   - userAllTradeCountMin/Max: tổng số giao dịch fiat của merchant nằm trong khoảng
-   *   - filterMaxSingleTransAmount: bỏ qua ads có maxSingleTransAmount lớn hơn ngưỡng
-   *   - limit: trần (BUY) hoặc sàn (SELL) — ads vượt khỏi limit sẽ bị bỏ qua
+   * Lấy giá tốt nhất từ market với các điều kiện lọc.
    *
    * ★ MỚI: Thêm lọc theo whitelist — bỏ qua ads có ad.merchant.nickName
    *   nằm trong state.whitelist (so sánh case-insensitive).
    *
    * Bỏ qua ads của chính mình (state.myAdvNos).
    * BUY → giá cao nhất; SELL → giá thấp nhất.
-   *
-   * @param {string} side - 'BUY' | 'SELL'
-   * @param {number} amount
-   * @param {number} onlineMinutes - 0 = không lọc
-   * @param {string} fiatUnit
-   * @param {number} limit - trần/sàn giá
-   * @param {Object} extraFilters - { userAllTradeCountMin, userAllTradeCountMax, filterMaxSingleTransAmount }
-   * @returns {Promise<number|null>}
    */
   async function apFindBestPrice(side, amount, fiatUnit = 'VND', limit, extraFilters = {}) {
     const now = Date.now();
@@ -1161,7 +1207,7 @@ const App = (() => {
     // ★ MỚI: Chuẩn bị whitelist set để tra cứu nhanh (lowercase)
     const whitelistSet = new Set(state.whitelist.map(n => n.toLowerCase()));
 
-    while (page <= 10) {
+    while (page <= 5) {
       const amountParam = amount > 0 ? `&amount=${amount}` : '';
       const result = await api.get(
         `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN${amountParam}`
@@ -1211,7 +1257,7 @@ const App = (() => {
           if (bestPrice === null || price < bestPrice) bestPrice = price;
         }
       }
-
+      
       page++;
     }
 
@@ -1263,9 +1309,9 @@ const App = (() => {
 
         // 3. Áp trần / sàn
         if (cfg.priceLimit) {
-          const limit = parseFloat(cfg.priceLimit);
-          if (isBuy  && newPrice > limit) newPrice = limit;
-          if (!isBuy && newPrice < limit) newPrice = limit;
+          const lim = parseFloat(cfg.priceLimit);
+          if (isBuy  && newPrice > lim) newPrice = lim;
+          if (!isBuy && newPrice < lim) newPrice = lim;
         }
 
         newPrice = Math.round(newPrice);
@@ -1435,6 +1481,7 @@ const App = (() => {
     // ★ MỚI: Load whitelist ngay khi khởi động (không cần kết nối)
     await loadWhitelist();
 
+    // ★ MỚI: Bắt đầu polling giá Binance
     startBinancePricePolling();
 
     const status = await api.get('/api/status');
@@ -1448,6 +1495,12 @@ const App = (() => {
       updateSecondaryConnectionUI(true, '');
       await loadMarketAds('BUY');
       await loadMarketAds('SELL');
+    }
+    // ★ MỚI: Check Bitget connection
+    if (status.data?.bitgetConnected) {
+      state.bgConnected = true;
+      updateBgConnectionUI(true);
+      await loadBitgetAds();
     }
 
     const config = await api.get('/api/config');
@@ -1486,6 +1539,16 @@ const App = (() => {
     // ★ MỚI: Whitelist functions
     addWhitelistMerchant,
     removeWhitelistMerchant,
+    // ★ MỚI: Binance price
+    loadBinancePrice,
+    // ★ MỚI: Bitget P2P
+    connectBitget,
+    disconnectBitget,
+    loadBitgetAds,
+    startBitgetPricer,
+    stopBitgetPricer,
+    bgApToggle,
+    bgApSetLimit,
   };
 })();
 
