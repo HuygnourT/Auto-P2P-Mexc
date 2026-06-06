@@ -26,7 +26,7 @@ async function fetchPriceFromTitle() {
     );
 
     const title = await page.title();
-    console.log("Title "+ title);
+    // console.log("Title "+ title);
     await page.close();
 
     // Lấy số đầu tiên trong title: "25,500 | Binance P2P USDT-VND" → 25500

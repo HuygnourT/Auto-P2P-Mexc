@@ -149,7 +149,7 @@
           <button class="btn btn-ghost btn-sm" onclick="App.loadBitgetAds()" style="margin-left:auto">Làm mới</button>
         </div>
         <div class="table-wrapper" id="bgAdsWrapper">
-          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Số lượng</th><th>Giới hạn</th><th>Fiat</th></tr></thead>
+          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Còn lại / Tổng</th><th>Thanh toán</th><th>Ngày tạo</th></tr></thead>
           <tbody id="bgAdsTableBody"><tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Kết nối Bitget để xem</p></div></td></tr></tbody>
           </table>
         </div>
@@ -177,6 +177,68 @@
         </div>
       </div>
     </div>
+
+    <!-- Test lấy thông tin Ad -->
+    <div style="margin-top:16px">
+      <div class="card-title" style="font-size:12px;margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.6"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        Tra cứu Ad theo ID
+      </div>
+      <div class="wl-input-row">
+        <input type="text" id="bgAdvIdInput" placeholder="Nhập advId..." spellcheck="false" onkeydown="if(event.key==='Enter') App.lookupBitgetAd()">
+        <button class="btn btn-primary btn-sm" id="bgLookupBtn" onclick="App.lookupBitgetAd()">Tra cứu</button>
+      </div>
+      <div id="bgAdInfoResult" style="display:none;margin-top:10px">
+        <div style="padding:14px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm)">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px" id="bgAdInfoGrid"></div>
+          <div style="margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted)">RAW JSON</label>
+            <pre id="bgAdInfoRaw" style="margin-top:4px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;background:var(--bg-input);padding:8px;border-radius:var(--radius-sm)"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<!-- Bitget Market Ads -->
+      <div style="margin-top:16px">
+        <div class="card-title" style="font-size:12px;margin-bottom:12px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.6"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Quảng cáo P2P Bitget Market
+        </div>
+        <div class="market-filter-bar">
+          <div class="market-filter-group">
+            <label class="filter-label">Số lượng (Amount)</label>
+            <div class="filter-input-unit">
+              <input type="number" id="bgFilterAmount" class="filter-input" placeholder="Bỏ trống = tất cả" min="0" step="1">
+              <span class="filter-unit">VND</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="App.loadBgMarket()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+            Tải dữ liệu
+          </button>
+        </div>
+        <div class="tabs-header">
+          <button class="tab-btn active" data-tab="bgBuy" onclick="App.switchBgMarketTab('buy')">🟢 Mua (BUY)</button>
+          <button class="tab-btn" data-tab="bgSell" onclick="App.switchBgMarketTab('sell')">🔴 Bán (SELL)</button>
+          <div class="tabs-actions">
+            <button class="btn btn-ghost btn-sm" onclick="App.loadBgMarket()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Làm mới
+            </button>
+          </div>
+        </div>
+        <div id="bgBuyMarketPanel" class="tab-panel active">
+          <div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th><th>TG xử lý</th></tr></thead>
+          <tbody id="bgBuyMarketBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Nhấn "Tải dữ liệu" để xem</p></div></td></tr></tbody></table></div>
+          <div class="pagination" id="bgBuyMarketPagination"></div>
+        </div>
+        <div id="bgSellMarketPanel" class="tab-panel">
+          <div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th><th>TG xử lý</th></tr></thead>
+          <tbody id="bgSellMarketBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Nhấn "Tải dữ liệu" để xem</p></div></td></tr></tbody></table></div>
+          <div class="pagination" id="bgSellMarketPagination"></div>
+        </div>
+      </div>
 
     <!-- CARD: TỰ ĐỘNG CHỈNH GIÁ (MEXC) -->
     <div class="card" id="autoPricerCard">
@@ -206,7 +268,7 @@
     </div>
 
     <!-- CARD: TEST CẬP NHẬT GIÁ QUẢNG CÁO -->
-    <div class="card">
+    <!-- <div class="card">
       <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Test cập nhật giá quảng cáo <span class="card-subtitle">POST /api/v3/fiat/merchant/ads/save_or_update</span></div>
       <div class="form-grid"><div class="form-group"><label>Ads ID (advNo) <span style="color:var(--danger)">*</span></label><input type="text" id="testAdvNo" placeholder="VD: a1375750128856004608" spellcheck="false"></div><div class="form-group"><label>Giá (price) <span style="color:var(--danger)">*</span></label><input type="number" id="testPrice" placeholder="VD: 25500" step="0.01" min="0"></div></div>
       <div class="form-grid"><div class="form-group"><label>Side</label><select id="testSide"><option value="BUY">BUY (Mua)</option><option value="SELL">SELL (Bán)</option></select></div><div class="form-group"><label>Fiat Unit</label><input type="text" id="testFiatUnit" value="VND" placeholder="VND"></div></div>
@@ -216,10 +278,10 @@
       <div class="form-grid"><div class="form-group"><label>Country Code</label><input type="text" id="testCountryCode" value="VN" placeholder="VN"></div><div class="form-group"><label>KYC Level</label><input type="text" id="testKycLevel" value="PRIMARY" placeholder="PRIMARY"></div></div>
       <div class="btn-row" style="margin-top:12px"><button class="btn btn-primary" id="testUpdateBtn" onclick="App.submitTestUpdateAd()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg> Gửi request</button><button class="btn btn-ghost" onclick="App.clearTestUpdateForm()">Xóa form</button></div>
       <div id="testUpdateResponse" style="display:none; margin-top:14px"><label style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em">API Response</label><pre id="testUpdateResponseText" style="margin-top:6px; padding:12px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:240px; overflow-y:auto"></pre></div>
-    </div>
+    </div> -->
 
     <!-- CARD: P2P MARKET -->
-    <div class="card">
+    <!-- <div class="card">
       <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> Quảng cáo P2P Market</div>
       <div class="market-filter-bar">
         <div class="market-filter-group"><label class="filter-label">Online tối đa</label><div class="filter-input-unit"><input type="number" id="filterOnlineMinutes" class="filter-input" placeholder="∞" min="1" step="1"><span class="filter-unit">phút</span></div></div>
@@ -239,10 +301,10 @@
       <div class="tab-panel active" id="buyPanel"><div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Thời gian</th><th></th></tr></thead><tbody id="buyTableBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><p>Kết nối để xem quảng cáo</p></div></td></tr></tbody></table></div><div class="pagination" id="buyPagination"></div></div>
       <div class="tab-panel" id="sellPanel"><div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Thời gian</th><th></th></tr></thead><tbody id="sellTableBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><p>Kết nối để xem quảng cáo</p></div></td></tr></tbody></table></div><div class="pagination" id="sellPagination"></div></div>
     </div>
-  </div>
+  </div> -->
 
   <!-- MODAL: SỬA QUẢNG CÁO -->
-  <div class="modal-overlay" id="editAdModal">
+  <!-- <div class="modal-overlay" id="editAdModal">
     <div class="modal">
       <div class="modal-header"><h3>✏️ Sửa quảng cáo</h3><button class="modal-close" onclick="App.closeEditModal()">&times;</button></div>
       <div class="modal-body">
@@ -259,7 +321,7 @@
       </div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="App.closeEditModal()">Hủy</button><button class="btn btn-primary" id="editSubmitBtn" onclick="App.submitEditAd()">💾 Cập nhật</button></div>
     </div>
-  </div>
+  </div> -->
 
   <div class="toast-container" id="toastContainer"></div>
   <script src="/js/app.js"></script>

@@ -184,7 +184,7 @@ router.get('/bitget/ads', async (req, res) => {
     return res.status(401).json({ code: -1, msg: 'Bitget not connected' });
   }
   try {
-    const result = await bitgetService.getAdvList(req.query);
+    const result = await bitgetService.getOnlineAds();
     res.json(result);
   } catch (error) {
     logger.error('Bitget ads error:', error.message);
@@ -204,6 +204,60 @@ router.post('/bitget/ads/update', async (req, res) => {
     res.status(500).json({ code: -1, msg: error.message });
   }
 });
+
+router.get('/bitget/ad-info', async (req, res) => {
+  if (!bitgetService) {
+    return res.status(401).json({ code: -1, msg: 'Bitget not connected' });
+  }
+  try {
+    const { advId } = req.query;
+    if (!advId) return res.status(400).json({ code: -1, msg: 'advId is required' });
+    const result = await bitgetService.getAdInfo(advId);
+    res.json(result);
+  } catch (error) {
+    logger.error('Bitget ad-info error:', error.message);
+    res.status(500).json({ code: -1, msg: error.message });
+  }
+});
+
+router.get('/bitget/market', async (req, res) => {
+  if (!bitgetService) {
+    return res.status(401).json({ code: -1, msg: 'Bitget not connected' });
+  }
+  try {
+    const { side, token, fiat, amount, pageNum, limit } = req.query;
+    if (!side) return res.status(400).json({ code: -1, msg: 'side is required' });
+    const params = {
+      token: token || 'USDT',
+      fiat: fiat || 'VND',
+      side,
+      pageNum: pageNum || '1',
+      limit: limit || '10',
+    };
+    if (amount) params.amount = amount;
+    const result = await bitgetService.getAdList(params);
+    res.json(result);
+  } catch (error) {
+    logger.error('Bitget market error:', error.message);
+    res.status(500).json({ code: -1, msg: error.message });
+  }
+});
+
+// router.get('/bitget/my-ads', async (req, res) => {
+//   if (!bitgetService) {
+//     return res.status(401).json({ code: -1, msg: 'Bitget not connected' });
+//   }
+//   try {
+//     const { advId } = req.query;
+//     if (!advId) return res.status(400).json({ code: -1, msg: 'advId is required' });
+//     const result = await bitgetService.getAdInfo(advId);
+//     res.json(result);
+//   } catch (error) {
+//     logger.error('Bitget ad-info error:', error.message);
+//     res.status(500).json({ code: -1, msg: error.message });
+//   }
+// });
+
 
 // ══════════════════════════════════════════════════════
 // MARKET ADS — dùng kết nối PHỤ (MEXC)

@@ -3,27 +3,24 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 
 /**
- * Service kết nối Bitget P2P API V2.
+ * Service kết nối Bitget P2P API — UTA (Unified Trading Account).
  *
- * Authentication: HMAC-SHA256 + Base64 (theo tài liệu chính thức Bitget + Java SDK mẫu)
- *   Headers: ACCESS-KEY, ACCESS-SIGN, ACCESS-TIMESTAMP, ACCESS-PASSPHRASE
- *
+ * Authentication: HMAC-SHA256 + Base64
  *   preHash = timestamp + METHOD + requestPath + queryString + body
- *     - queryString rỗng → ""
- *     - queryString có giá trị → "?" + params (sort alphabet by key)
- *     - body rỗng (GET) → ""
  *   Sign = Base64( HMAC-SHA256( secretKey, preHash ) )
  *
- * Endpoints V2:
- *   GET  /api/v2/p2p/advList    — lấy danh sách ads của merchant
- *   POST /api/v2/p2p/advUpdate  — cập nhật giá/thông tin ad
+ * Endpoints:
+ *   GET  /api/v3/p2p/my-ads     — lấy ads của tôi (UTA V3)
+ *   POST /api/v2/p2p/advUpdate  — cập nhật ad (chờ V3 docs)
  *
- * Required params cho advList:
- *   startTime (String) — Unix millisecond timestamp
- *   status    (String) — online / offline / editing / completed
- *   side      (String) — buy / sell
- *   coin      (String) — VD: USDT
- *   fiat      (String) — VD: VND
+ * V3 Get My Ads — tất cả params optional:
+ *   startTime, endTime, limit, cursor, advId, token, fiat,
+ *   status (publish/delist/remove)
+ *
+ * V3 Response:
+ *   data.items[]: { advId, side, priceType, token, fiat, price,
+ *     soldAmount, lastAmount, payMethods, status, createdTime, updatedTime }
+ *   data.nextId: cursor phân trang
  */
 
 class BitgetP2PService {
@@ -34,13 +31,6 @@ class BitgetP2PService {
     this.baseUrl = 'https://api.bitget.com';
   }
 
-  /**
-   * Tạo chữ ký HMAC-SHA256 Base64.
-   * Match chính xác với Java SDK mẫu:
-   *   queryString = isBlank ? "" : "?" + queryString
-   *   body = isBlank ? "" : body
-   *   preHash = timestamp + method + requestPath + queryString + body
-   */
   sign(timestamp, method, requestPath, queryString, body) {
     queryString = queryString ? '?' + queryString : '';
     body = body || '';
@@ -50,9 +40,6 @@ class BitgetP2PService {
     return hmac.update(preHash).digest('base64');
   }
 
-  /**
-   * Tạo headers cho request.
-   */
   getHeaders(method, requestPath, queryString, body) {
     const timestamp = Date.now().toString();
     const signature = this.sign(timestamp, method, requestPath, queryString || '', body || '');
@@ -66,12 +53,6 @@ class BitgetP2PService {
     };
   }
 
-  /**
-   * Build queryString từ params object.
-   * - Lọc bỏ undefined / rỗng
-   * - Sort alphabet theo key (yêu cầu của Bitget)
-   * - Không dùng encodeURIComponent
-   */
   buildQueryString(params) {
     return Object.entries(params)
       .filter(([_, v]) => v !== undefined && v !== '')
@@ -80,18 +61,13 @@ class BitgetP2PService {
       .join('&');
   }
 
-  /**
-   * GET request chung — xử lý error response chi tiết.
-   */
   async getRequest(requestPath, params = {}) {
     const queryString = this.buildQueryString(params);
     const headers = this.getHeaders('GET', requestPath, queryString, '');
     const url = queryString
       ? `${this.baseUrl}${requestPath}?${queryString}`
       : `${this.baseUrl}${requestPath}`;
-
     logger.debug(`[Bitget] GET ${url}`);
-
     try {
       const res = await axios.get(url, { headers, timeout: 15000 });
       return res.data;
@@ -104,15 +80,10 @@ class BitgetP2PService {
     }
   }
 
-  /**
-   * POST request chung — xử lý error response chi tiết.
-   */
   async postRequest(requestPath, bodyObj = {}) {
     const body = JSON.stringify(bodyObj);
     const headers = this.getHeaders('POST', requestPath, '', body);
-
     logger.debug(`[Bitget] POST ${requestPath} body=${body}`);
-
     try {
       const res = await axios.post(`${this.baseUrl}${requestPath}`, body, { headers, timeout: 15000 });
       return res.data;
@@ -126,81 +97,59 @@ class BitgetP2PService {
   }
 
   /**
-   * GET /api/v2/p2p/advList — lấy danh sách ads của merchant.
-   *
-   * Required params:
-   *   startTime (String) — Unix ms timestamp
-   *   status    (String) — online / offline / editing / completed
-   *   side      (String) — buy / sell
-   *   coin      (String) — VD: USDT
-   *   fiat      (String) — VD: VND
-   *
-   * Optional params:
-   *   endTime      (String) — Unix ms timestamp, max 90 ngày từ startTime
-   *   idLessThan   (String) — minAdvId từ query trước (phân trang)
-   *   limit        (String) — số lượng, default 20, max 20
-   *   language     (String) — zh-CN / en-US
-   *   advNo        (String) — mã quảng cáo cụ thể
-   *   orderBy      (String) — createTime / price (default: createTime desc)
-   *   payMethodId  (String) — ID phương thức thanh toán
-   *   sourceType   (String) — owner / competition / ownerAndCompetition
+   * GET /api/v3/p2p/my-ads — lấy ads của tôi (UTA).
+   * Tất cả params optional.
    */
-  async getAdvList(params = {}) {
-    return this.getRequest('/api/v2/p2p/advList', params);
+  async getMyAds(params = {}) {
+    return this.getRequest('/api/v3/p2p/my-ads', params);
+  }
+
+  /**
+   * GET /api/v3/p2p/ad-info — lấy thông tin chi tiết 1 ad.
+   * Required: advId
+   */
+  async getAdInfo(advId) {
+    return this.getRequest('/api/v3/p2p/ad-info', { advId });
+  }
+
+  /**
+   * GET /api/v3/p2p/ad-list — lấy giá quảng cáo trên thị trường.
+   * Required: token, fiat, side, pageNum, limit
+   * Optional: amount
+   */
+  async getAdList(params = {}) {
+    return this.getRequest('/api/v3/p2p/ad-list', params);
   }
 
   /**
    * POST /api/v2/p2p/advUpdate — cập nhật ad.
-   *
-   * Body fields:
-   *   advNo          — mã quảng cáo (bắt buộc)
-   *   price          — giá mới (string)
-   *   coin           — loại coin, VD: "USDT"
-   *   fiatCode       — mã fiat, VD: "VND"
-   *   type           — "buy" hoặc "sell"
-   *   amount         — số lượng
-   *   minAmount      — giới hạn tối thiểu
-   *   maxAmount      — giới hạn tối đa
-   *   status         — "online" / "offline"
-   *   payDuration    — thời gian thanh toán (phút)
-   *   paymentMethod  — mảng phương thức thanh toán
-   *   remark         — ghi chú
+   * TODO: Đổi sang V3 khi có docs.
    */
   async updateAd(bodyObj) {
     return this.postRequest('/api/v2/p2p/advUpdate', bodyObj);
   }
 
   /**
-   * Test kết nối + lấy tất cả ads USDT/VND đang online (cả BUY + SELL).
-   * Phải gọi 2 lần vì side là param bắt buộc.
+   * Test kết nối + lấy ads đang publish.
    */
   async testConnection() {
     try {
-      logger.info('[Bitget] Testing connection...');
-      const now = Date.now().toString();
-      const baseParams = { startTime: now, status: 'online', coin: 'USDT', fiat: 'VND', limit: '20' };
+      logger.info('[Bitget] Testing connection (UTA V3)...');
+      const result = await this.getMyAds({ limit: '10', token : 'USDT', fiat : 'VND', advId : '1420836731317575681' });
+      logger.info(`[Bitget] testConnection response code: ${result.code}`);
+      console.log(JSON.stringify(result));
 
-      const buyResult = await this.getAdvList({ ...baseParams, side: 'buy' });
-      const sellResult = await this.getAdvList({ ...baseParams, side: 'sell' });
-
-      const buyOk = buyResult.code === '00000';
-      const sellOk = sellResult.code === '00000';
-
-      if (!buyOk && !sellOk) {
-        logger.error(`[Bitget] Connection failed — BUY: code=${buyResult.code} msg=${buyResult.msg} | SELL: code=${sellResult.code} msg=${sellResult.msg}`);
+      if (result.code === '00000') {
+        const items = result.data?.items || [];
+        logger.info(`[Bitget] Connected — found ${items.length} publish ads`);
+        items.forEach(ad => {
+          logger.info(`[Bitget]   ${ad.advId} | ${ad.side} | ${ad.token}/${ad.fiat} | price=${ad.price} | last=${ad.lastAmount} | sold=${ad.soldAmount} | status=${ad.status}`);
+        });
+        return true;
+      } else {
+        logger.error(`[Bitget] Failed: code=${result.code}, msg=${result.msg}`);
         return false;
       }
-
-      const buyAds = buyOk ? (buyResult.data?.advList || []) : [];
-      const sellAds = sellOk ? (sellResult.data?.advList || []) : [];
-      const allAds = [...buyAds, ...sellAds];
-
-      logger.info(`[Bitget] Connected — ${buyAds.length} BUY + ${sellAds.length} SELL online ads`);
-      allAds.forEach(ad => {
-        logger.info(`[Bitget]   ${ad.advNo} | ${ad.type} | ${ad.coin}/${ad.fiatCode} | price=${ad.price} | amount=${ad.amount} | status=${ad.status}`);
-      });
-
-      return true;
     } catch (err) {
       if (err.response) {
         logger.error(`[Bitget] HTTP ${err.response.status}:`, JSON.stringify(err.response.data));
@@ -212,40 +161,17 @@ class BitgetP2PService {
   }
 
   /**
-   * Lấy tất cả ads USDT/VND đang online (BUY + SELL).
-   * Trả về format thống nhất: { code, data: { advList: [...] } }
+   * Lấy ads đang publish (online).
    */
   async getOnlineAds() {
-    const now = Date.now().toString();
-    const baseParams = { startTime: now, status: 'online', coin: 'USDT', fiat: 'VND', limit: '20' };
-
-    const buyResult = await this.getAdvList({ ...baseParams, side: 'buy' });
-    const sellResult = await this.getAdvList({ ...baseParams, side: 'sell' });
-
-    const buyAds = buyResult.code === '00000' ? (buyResult.data?.advList || []) : [];
-    const sellAds = sellResult.code === '00000' ? (sellResult.data?.advList || []) : [];
-
-    return { code: '00000', data: { advList: [...buyAds, ...sellAds] } };
+    return this.getMyAds({ status: 'publish', limit: '10' });
   }
 
   /**
-   * Lấy tất cả ads USDT/VND (cả online + offline).
+   * Lấy tất cả ads.
    */
   async getAllAds() {
-    const now = Date.now().toString();
-    const base = { startTime: now, coin: 'USDT', fiat: 'VND', limit: '20' };
-    const results = [];
-
-    for (const status of ['online', 'offline']) {
-      for (const side of ['buy', 'sell']) {
-        const r = await this.getAdvList({ ...base, status, side });
-        if (r.code === '00000' && r.data?.advList) {
-          results.push(...r.data.advList);
-        }
-      }
-    }
-
-    return { code: '00000', data: { advList: results } };
+    return this.getMyAds({ limit: '10' });
   }
 }
 
