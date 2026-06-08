@@ -121,13 +121,15 @@ class BitgetP2PService {
     return this.getRequest('/api/v3/p2p/ad-list', params);
   }
 
-  /**
-   * POST /api/v2/p2p/advUpdate — cập nhật ad.
-   * TODO: Đổi sang V3 khi có docs.
-   */
-  async updateAd(bodyObj) {
-    return this.postRequest('/api/v2/p2p/advUpdate', bodyObj);
-  }
+/**
+ * POST /api/v3/p2p/ad-update — cập nhật ad (UTA V3).
+ * Required: advId, payTimeLimit
+ * Optional: priceType, price, premium, minAmount, maxAmount,
+ *           quantity, payMethodIds[], remark, tradeTerms
+ */
+async updateAd(bodyObj) {
+  return this.postRequest('/api/v3/p2p/ad-update', bodyObj);
+}
 
   /**
    * Test kết nối + lấy ads đang publish.

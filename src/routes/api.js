@@ -6,6 +6,8 @@ const binancePrice = require('../services/binancePrice');        // ★ MỚI
 const BitgetP2PService = require('../services/bitgetP2P');       // ★ MỚI
 const logger = require('../utils/logger');
 const config = require('../config');
+const settings = require('../services/settings');   // ★ thêm cạnh các require khác
+
 
 /**
  * activeService    — kết nối chính MEXC: dùng cho My Ads và các thao tác cá nhân.
@@ -108,6 +110,23 @@ function requireSecondaryConnection(_req, res, next) {
   }
   next();
 }
+
+// ══════════════════════════════════════════════════════
+// SETTINGS — Lưu cấu hình & thông tin đăng nhập
+// ══════════════════════════════════════════════════════
+
+router.get('/settings', (_req, res) => {
+  res.json({ code: 0, data: settings.getSettings() });
+});
+
+router.post('/settings/:section', (req, res) => {
+  try {
+    const updated = settings.saveSection(req.params.section, req.body || {});
+    res.json({ code: 0, data: updated });
+  } catch (err) {
+    res.status(400).json({ code: -1, msg: err.message });
+  }
+});
 
 // ══════════════════════════════════════════════════════
 // WHITELIST — Danh sách thương nhân bỏ qua

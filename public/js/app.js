@@ -55,6 +55,8 @@ const App = (() => {
     bgMarketSell: [],
     bgMarketBuyPage: 1,
     bgMarketSellPage: 1,
+    // ★ Bitget auto-pricer: danh sách dòng cấu hình tùy chỉnh
+    bgApRows: [],   // [{ id, side:'buy'|'sell', advId, priceLimit, enabled, lastStatus }]
   };
 
   // Timer auto-refresh (handle của setInterval)
@@ -66,6 +68,7 @@ const App = (() => {
 
   // ★ MỚI: Bitget auto-pricer timer
   let bgApTimer = null;
+  let bgApRowSeq = 1;
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
@@ -183,6 +186,99 @@ const App = (() => {
     }).join('');
   }
 
+  async function loadSettings() {
+  try {
+    const r = await api.get('/api/settings');
+    if (r.code === 0 && r.data) state.savedSettings = r.data;
+  } catch (e) { console.error('[Settings]', e); }
+}
+
+// Điền sẵn thông tin đăng nhập đã lưu vào các ô input
+function prefillCredentials() {
+  const s = state.savedSettings || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+  if (s.mexc) {
+    set('apiKey', s.mexc.apiKey); set('secretKey', s.mexc.secretKey); set('apiHost', s.mexc.apiHost);
+    set('apiKey2', s.mexc.apiKey2); set('secretKey2', s.mexc.secretKey2); set('apiHost2', s.mexc.apiHost2);
+  }
+  if (s.bitget) {
+    set('bgApiKey', s.bitget.apiKey); set('bgSecretKey', s.bitget.secretKey); set('bgPassphrase', s.bitget.passphrase);
+  }
+}
+
+async function saveMexcCreds() {
+  const data = {
+    apiKey: document.getElementById('apiKey').value.trim(),
+    secretKey: document.getElementById('secretKey').value.trim(),
+    apiHost: document.getElementById('apiHost').value,
+    apiKey2: document.getElementById('apiKey2').value.trim(),
+    secretKey2: document.getElementById('secretKey2').value.trim(),
+    apiHost2: document.getElementById('apiHost2').value,
+  };
+  const r = await api.post('/api/settings/mexc', data);
+  if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu thông tin đăng nhập MEXC', 'success'); }
+  else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+}
+
+async function saveBitgetCreds() {
+  const data = {
+    apiKey: document.getElementById('bgApiKey').value.trim(),
+    secretKey: document.getElementById('bgSecretKey').value.trim(),
+    passphrase: document.getElementById('bgPassphrase').value.trim(),
+  };
+  const r = await api.post('/api/settings/bitget', data);
+  if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu thông tin đăng nhập Bitget', 'success'); }
+  else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+}
+
+async function saveMexcPricer() {
+  const data = {
+    scanInterval: document.getElementById('apScanInterval').value,
+    apConfigs: state.apConfigs,
+  };
+  const r = await api.post('/api/settings/mexcPricer', data);
+  if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu cấu hình auto-pricer MEXC', 'success'); }
+  else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+}
+
+async function saveBitgetPricer() {
+  const data = {
+    scanInterval: document.getElementById('bgScanInterval').value,
+    offsetBuy: document.getElementById('bgOffsetBuy').value,
+    offsetSell: document.getElementById('bgOffsetSell').value,
+    rows: state.bgApRows,
+  };
+  const r = await api.post('/api/settings/bitgetPricer', data);
+  if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu cấu hình auto-pricer Bitget', 'success'); }
+  else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+}
+
+// Khôi phục cấu hình MEXC sau khi đã loadMyAds (KHÔNG tự chạy)
+function restoreMexcPricerConfig() {
+  const saved = state.savedSettings?.mexcPricer;
+  if (!saved) return;
+  if (saved.scanInterval) document.getElementById('apScanInterval').value = saved.scanInterval;
+  if (saved.apConfigs) {
+    for (const [advNo, cfg] of Object.entries(saved.apConfigs)) {
+      state.apConfigs[advNo] = { ...cfg };   // ghi đè cấu hình mặc định
+    }
+  }
+}
+
+// Khôi phục cấu hình Bitget sau khi connect (KHÔNG tự chạy)
+function restoreBitgetPricerConfig() {
+  const saved = state.savedSettings?.bitgetPricer;
+  if (!saved) return;
+  if (saved.scanInterval) document.getElementById('bgScanInterval').value = saved.scanInterval;
+  if (saved.offsetBuy != null && saved.offsetBuy !== '') document.getElementById('bgOffsetBuy').value = saved.offsetBuy;
+  if (saved.offsetSell != null && saved.offsetSell !== '') document.getElementById('bgOffsetSell').value = saved.offsetSell;
+  if (Array.isArray(saved.rows) && saved.rows.length) {
+    state.bgApRows = saved.rows.map(r => ({ ...r, lastStatus: '' }));  // giữ enabled, reset trạng thái
+    bgApRowSeq = Math.max(0, ...state.bgApRows.map(r => r.id || 0)) + 1;
+    renderBgApRows();
+  }
+}
+
   // ═══════════════════════════════════════════════════════
   // ★ MỚI: BINANCE PRICE — Hiển thị giá từ pricedancing.com
   // ═══════════════════════════════════════════════════════
@@ -224,46 +320,33 @@ const App = (() => {
   // ═══════════════════════════════════════════════════════
 
   async function loadBgMarket(side) {
-    if (!state.bgConnected) { showToast('Chưa kết nối Bitget', 'error'); return; }
+  if (!state.bgConnected) { showToast('Chưa kết nối Bitget', 'error'); return; }
 
-    const loadSide = side || state.bgMarketTab;
+  const amount = document.getElementById('bgFilterAmount')?.value || '';
+
+  // Không chỉ định side → tải cả buy + sell; có side → chỉ tải side đó (dùng cho phân trang)
+  const sidesToLoad = side ? [side] : ['buy', 'sell'];
+
+  for (const loadSide of sidesToLoad) {
     const pageKey = loadSide === 'buy' ? 'bgMarketBuyPage' : 'bgMarketSellPage';
-    const amount = document.getElementById('bgFilterAmount')?.value || '';
-
     try {
       const params = `side=${loadSide}&token=USDT&fiat=VND&pageNum=${state[pageKey]}&limit=10${amount ? '&amount=' + amount : ''}`;
       const r = await api.get(`/api/bitget/market?${params}`);
-
-      console.log(r);
+      console.log('[BgMarket]', loadSide, r);
 
       if (r.code === '00000') {
-        const ads = Array.isArray(r.data) ? r.data : [];
-        if (loadSide === 'buy') state.bgMarketBuy = Array.isArray(r.data) ? r.data : [];
-          else state.bgMarketSell = Array.isArray(r.data) ? r.data : [];
+        const ads = r.data.items;
+        if (loadSide === 'buy') state.bgMarketBuy = ads;
+        else state.bgMarketSell = ads;
         renderBgMarketTable(loadSide);
       } else {
-        showToast(`Lỗi: ${r.msg}`, 'error');
+        showToast(`Lỗi: ${r.msg || 'Không tải được dữ liệu'}`, 'error');
       }
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'error');
     }
-
-    // Tải cả 2 tab nếu không chỉ định side
-    if (!side) {
-      const otherSide = loadSide === 'buy' ? 'sell' : 'buy';
-      const otherPageKey = otherSide === 'buy' ? 'bgMarketBuyPage' : 'bgMarketSellPage';
-      const amount2 = document.getElementById('bgFilterAmount')?.value || '';
-      try {
-        const params2 = `side=${otherSide}&token=USDT&fiat=VND&pageNum=${state[otherPageKey]}&limit=10${amount2 ? '&amount=' + amount2 : ''}`;
-        const r2 = await api.get(`/api/bitget/market?${params2}`);
-        if (r2.code === '00000') {
-          if (otherSide === 'buy') state.bgMarketBuy = Array.isArray(r2.data) ? r2.data : [];
-          else state.bgMarketSell = Array.isArray(r2.data) ? r2.data : [];
-          renderBgMarketTable(otherSide);
-        }
-      } catch (_) {}
-    }
   }
+}
 
   function renderBgMarketTable(side) {
     const ads = side === 'buy' ? state.bgMarketBuy : state.bgMarketSell;
@@ -318,12 +401,22 @@ const App = (() => {
 
   function switchBgMarketTab(tab) {
     state.bgMarketTab = tab;
-    document.querySelectorAll('#bitgetCard .tab-btn').forEach(btn => {
-      const isActive = btn.dataset.tab === 'bg' + tab.charAt(0).toUpperCase() + tab.slice(1);
-      btn.classList.toggle('active', isActive);
-    });
+
+    // 2 nút tab nằm NGOÀI #bitgetCard → chọn trực tiếp theo data-tab
+    const buyBtn  = document.querySelector('[data-tab="bgBuy"]');
+    const sellBtn = document.querySelector('[data-tab="bgSell"]');
+    if (buyBtn)  buyBtn.classList.toggle('active', tab === 'buy');
+    if (sellBtn) sellBtn.classList.toggle('active', tab === 'sell');
+
+    // Hiện/ẩn panel tương ứng
     document.getElementById('bgBuyMarketPanel').classList.toggle('active', tab === 'buy');
     document.getElementById('bgSellMarketPanel').classList.toggle('active', tab === 'sell');
+
+    // Nếu side này chưa có dữ liệu → tự động tải
+    const ads = tab === 'buy' ? state.bgMarketBuy : state.bgMarketSell;
+    if (state.bgConnected && (!ads || ads.length === 0)) {
+      loadBgMarket(tab);
+    }
   }
 
   function changeBgMarketPage(side, direction) {
@@ -349,6 +442,7 @@ const App = (() => {
         updateBgConnectionUI(true);
         showToast('Bitget kết nối thành công!', 'success');
         await loadBitgetAds();
+        restoreBitgetPricerConfig();  // ★ khôi phục cấu hình đã lưu
       } else {
         showToast(r.msg || 'Bitget kết nối thất bại', 'error');
       }
@@ -401,15 +495,82 @@ const App = (() => {
     }
   }
 
+  async function submitBitgetUpdateAd() {
+    const advId = document.getElementById('bgUpAdvId').value.trim();
+    if (!advId) { showToast('advId là bắt buộc', 'error'); return; }
+
+    const payload = { advId };
+
+    const priceType = document.getElementById('bgUpPriceType').value;
+    if (priceType) payload.priceType = priceType;
+
+    const fields = {
+      bgUpPrice: 'price',
+      bgUpPremium: 'premium',
+      bgUpMinAmount: 'minAmount',
+      bgUpMaxAmount: 'maxAmount',
+      bgUpQuantity: 'quantity',
+      bgUpPayTimeLimit: 'payTimeLimit',
+      bgUpRemark: 'remark',
+      bgUpTradeTerms: 'tradeTerms',
+    };
+    for (const [id, key] of Object.entries(fields)) {
+      const v = document.getElementById(id).value.trim();
+      if (v) payload[key] = v;  // gửi dạng String theo docs
+    }
+
+    // payMethodIds là mảng object { payMethodId, userPayMethodId? }
+    const payMethodId = document.getElementById('bgUpPayMethodId').value.trim();
+    const userPayMethodId = document.getElementById('bgUpUserPayMethodId').value.trim();
+    if (payMethodId) {
+      const pm = { payMethodId };
+      if (userPayMethodId) pm.userPayMethodId = userPayMethodId;
+      payload.payMethodIds = [pm];
+    }
+
+    setLoading(true, 'bgUpdateBtn');
+    const responseEl = document.getElementById('bgUpdateResponse');
+    const responseText = document.getElementById('bgUpdateResponseText');
+    responseEl.style.display = 'none';
+    try {
+      const result = await api.post('/api/bitget/ads/update', payload);
+      responseEl.style.display = 'block';
+      responseText.textContent = JSON.stringify(result, null, 2);
+      if (result.code === '00000') {
+        showToast('Cập nhật Bitget thành công!', 'success');
+        await loadBitgetAds();
+      } else {
+        showToast(`Lỗi: ${result.msg || 'Thất bại'}`, 'error');
+      }
+    } catch (err) {
+      responseEl.style.display = 'block';
+      responseText.textContent = err.message;
+      showToast('Lỗi gửi request: ' + err.message, 'error');
+    } finally {
+      setLoading(false, 'bgUpdateBtn');
+    }
+  }
+
+  function clearBitgetUpdateForm() {
+    ['bgUpAdvId','bgUpPrice','bgUpPremium','bgUpMinAmount','bgUpMaxAmount',
+    'bgUpQuantity','bgUpPayTimeLimit','bgUpPayMethodId','bgUpUserPayMethodId',
+    'bgUpRemark','bgUpTradeTerms'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('bgUpPriceType').value = '';
+    document.getElementById('bgUpdateResponse').style.display = 'none';
+  }
+
+
   async function disconnectBitget() {
     await api.post('/api/bitget/disconnect');
     state.bgConnected = false;
     state.bgAds = [];
-    state.bgApConfigs = {};
     if (bgApTimer) { clearInterval(bgApTimer); bgApTimer = null; }
     updateBgConnectionUI(false);
     renderBgAdsTable();
-    renderBgApTable();
+    renderBgApRows();
     showToast('Đã ngắt Bitget', 'info');
   }
 
@@ -429,7 +590,6 @@ const App = (() => {
       if (r.code === '00000') {
         state.bgAds = r.data?.items || [];
         renderBgAdsTable();
-        renderBgApTable();
       }
     } catch (err) { showToast('Lỗi Bitget: ' + err.message, 'error'); }
   }
@@ -461,36 +621,120 @@ const App = (() => {
     }).join('');
   }
 
-  function renderBgApTable() {
+  function renderBgApRows() {
     const tbody = document.getElementById('bgApTableBody');
     if (!tbody) return;
-    if (!state.bgAds.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="ap-empty">Kết nối Bitget để cấu hình</td></tr>';
+    if (!state.bgApRows.length) {
+      tbody.innerHTML = '<tr><td colspan="13" class="ap-empty">Chưa có dòng nào. Bấm "➕ Thêm dòng" để cấu hình.</td></tr>';
       return;
     }
-    tbody.innerHTML = state.bgAds.filter(a => a.status === 'publish').map(ad => {
-      const advKey = ad.advId || '';
-      if (!state.bgApConfigs[advKey]) {
-        state.bgApConfigs[advKey] = { enabled: false, priceLimit: '', lastStatus: '' };
-      }
-      const c = state.bgApConfigs[advKey];
-      const isBuy = ad.side === 'buy';
-      return `<tr>
-        <td><span class="mono-cell" style="font-size:11px">${truncateId(advKey)}</span>
-            <span class="side-badge ${isBuy ? 'side-buy' : 'side-sell'}" style="font-size:10px;margin-left:6px">${isBuy ? 'BUY' : 'SELL'}</span></td>
-        <td><label class="toggle"><input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="App.bgApToggle('${advKey}',this.checked)"><span class="toggle-slider"></span></label></td>
-        <td><input type="number" class="ap-num-input" value="${c.priceLimit}" placeholder="${isBuy ? 'Trần' : 'Sàn'}" onchange="App.bgApSetLimit('${advKey}',this.value)"></td>
-        <td><span class="ap-row-status" id="bg-status-${advKey}">${c.lastStatus || '—'}</span></td>
-      </tr>`;
-    }).join('');
+    tbody.innerHTML = state.bgApRows.map(r => `
+      <tr id="bg-ap-row-${r.id}">
+        <td>
+          <select class="ap-num-input" style="width:90px" onchange="App.bgApSetRow(${r.id},'side',this.value)">
+            <option value="buy" ${r.side === 'buy' ? 'selected' : ''}>MUA</option>
+            <option value="sell" ${r.side === 'sell' ? 'selected' : ''}>BÁN</option>
+          </select>
+        </td>
+        <td><input type="text" class="ap-num-input" style="width:170px" value="${escapeHtml(r.advId)}" placeholder="advId" onchange="App.bgApSetRow(${r.id},'advId',this.value.trim())"></td>
+        <td><label class="toggle"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="App.bgApSetRow(${r.id},'enabled',this.checked)"><span class="toggle-slider"></span></label></td>
+        <td><input type="number" class="ap-num-input" style="width:110px" value="${r.searchAmount}" placeholder="Tất cả" onchange="App.bgApSetRow(${r.id},'searchAmount',this.value)"></td>
+        <td>
+          <div class="filter-input-unit" style="width:fit-content">
+            <input type="number" class="filter-input" style="width:80px" value="${r.offset}" placeholder="mặc định" onchange="App.bgApSetRow(${r.id},'offset',this.value)">
+            <span class="filter-unit">VND</span>
+          </div>
+        </td>
+        <td><input type="number" class="ap-num-input" value="${r.priceLimit}" placeholder="${r.side === 'buy' ? 'Trần' : 'Sàn'}" onchange="App.bgApSetRow(${r.id},'priceLimit',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.minAmount}" placeholder="—" onchange="App.bgApSetRow(${r.id},'minAmount',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.maxAmount}" placeholder="—" onchange="App.bgApSetRow(${r.id},'maxAmount',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.quantity}" placeholder="—" onchange="App.bgApSetRow(${r.id},'quantity',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.refillThreshold}" placeholder="—" onchange="App.bgApSetRow(${r.id},'refillThreshold',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.refillQuantity}" placeholder="—" onchange="App.bgApSetRow(${r.id},'refillQuantity',this.value)"></td>
+        <td><span class="ap-row-status" id="bg-ap-status-${r.id}">${escapeHtml(r.lastStatus) || '—'}</span></td>
+        <td><button class="ap-job-actions btn-remove" style="padding:4px 10px;font-size:11px;border-radius:4px;border:1px solid rgba(239,68,68,0.3);background:rgba(255,255,255,0.04);color:var(--red);cursor:pointer" onclick="App.bgApRemoveRow(${r.id})">Xóa</button></td>
+      </tr>
+    `).join('');
   }
 
-  function bgApToggle(advKey, enabled) {
-    if (state.bgApConfigs[advKey]) state.bgApConfigs[advKey].enabled = enabled;
+  function bgApAddRow() {
+    state.bgApRows.push({
+      id: bgApRowSeq++, side: 'buy', advId: '',
+      priceLimit: '', minAmount: '', maxAmount: '', quantity: '',
+      searchAmount: '', offset: '',
+      refillThreshold: '', refillQuantity: '',
+      enabled: false, lastStatus: ''
+    });
+    renderBgApRows();
   }
-  function bgApSetLimit(advKey, val) {
-    if (state.bgApConfigs[advKey]) state.bgApConfigs[advKey].priceLimit = val;
+
+  function bgApRemoveRow(id) {
+    state.bgApRows = state.bgApRows.filter(r => r.id !== id);
+    renderBgApRows();
   }
+
+  function bgApSetRow(id, field, value) {
+    const row = state.bgApRows.find(r => r.id === id);
+    if (!row) return;
+    row[field] = value;
+    // Đổi side → cập nhật placeholder Trần/Sàn
+    if (field === 'side') renderBgApRows();
+  }
+
+  /**
+   * Lấy giá tốt nhất của 1 chiều market.
+   * marketSide='sell' → giá thấp nhất; marketSide='buy' → giá cao nhất.
+   */
+  async function bgFindBestMarketPrice(marketSide, searchAmount, selfAdvId, priceLimit, isBuyAd) {
+    const amount = (searchAmount !== '' && searchAmount != null)
+      ? searchAmount
+      : (document.getElementById('bgFilterAmount')?.value || '');
+    const params = `side=${marketSide}&token=USDT&fiat=VND&pageNum=1&limit=10${amount ? '&amount=' + amount : ''}`;
+    const r = await api.get(`/api/bitget/market?${params}`);
+    if (r.code !== '00000') return null;
+    const ads = r.data.items;
+
+    const hasLimit = priceLimit !== '' && priceLimit != null && !isNaN(parseFloat(priceLimit));
+    const lim = hasLimit ? parseFloat(priceLimit) : null;
+
+    // Số lượng giao dịch cần so giá (để kiểm tra ad đối thủ có gánh được không)
+    const reqAmount = (searchAmount !== '' && searchAmount != null && !isNaN(parseFloat(searchAmount)))
+      ? parseFloat(searchAmount)
+      : 0;
+
+    let best = null;
+    for (const ad of ads) {
+      if (selfAdvId && String(ad.advId) === String(selfAdvId)) continue;
+      const p = parseFloat(ad.price);
+      if (isNaN(p)) continue;
+
+      // Lọc theo trần/sàn: ad MUA bỏ giá > trần; ad BÁN bỏ giá < sàn
+      if (hasLimit) {
+        if (isBuyAd && p > lim) continue;
+        if (!isBuyAd && p < lim) continue;
+      }
+
+      // Trần giao dịch THỰC của đối thủ = min(maxAmount đã đặt, quantity còn lại × giá)
+      // Khi quantity tụt mà maxAmount chưa cập nhật, quantity×price phản ánh đúng hơn.
+      if (reqAmount > 0) {
+        const declaredMax = parseFloat(ad.maxAmount);
+        const byQty = parseFloat(ad.quantity) * p;
+        let effectiveMax;
+        if (!isNaN(declaredMax) && !isNaN(byQty)) effectiveMax = Math.min(declaredMax, byQty);
+        else if (!isNaN(declaredMax)) effectiveMax = declaredMax;
+        else if (!isNaN(byQty)) effectiveMax = byQty;
+        else effectiveMax = null;
+
+        // Nếu trần thực không gánh nổi mức giao dịch cần → bỏ qua ad này
+        if (effectiveMax !== null && effectiveMax < reqAmount) continue;
+      }
+
+      if (best === null) best = p;
+      else best = marketSide === 'sell' ? Math.max(best, p) : Math.min(best, p);
+    }
+    return best;
+  }
+
 
   function bgLog(msg, type = '') {
     const log = document.getElementById('bgLog');
@@ -507,93 +751,169 @@ const App = (() => {
   }
 
   async function bgRunCycle() {
-    if (!state.bgAds.length) return;
-    const offsetBuy = parseFloat(document.getElementById('bgOffsetBuy').value) || -50;
-    const offsetSell = parseFloat(document.getElementById('bgOffsetSell').value) || 50;
+    const rows = state.bgApRows.filter(r => r.enabled && r.advId);
+    if (!rows.length) return;
 
-    for (const ad of state.bgAds) {
-      const advKey = ad.advId || '';
-      const cfg = state.bgApConfigs[advKey];
-      if (!cfg || !cfg.enabled || ad.status !== 'publish') continue;
+    const offsetBuy = parseFloat(document.getElementById('bgOffsetBuy').value) || 0;
+    const offsetSell = parseFloat(document.getElementById('bgOffsetSell').value) || 0;
 
-      const isBuy = ad.side === 'buy';
-      const statusEl = document.getElementById(`bg-status-${advKey}`);
+    for (const row of rows) {
+      const isBuy = row.side === 'buy';
+      const statusEl = document.getElementById(`bg-ap-status-${row.id}`);
+      const setStatus = (msg, type) => {
+        row.lastStatus = msg;
+        if (statusEl) { statusEl.textContent = msg; statusEl.className = `ap-row-status${type ? ' ' + type : ''}`; }
+      };
 
       try {
-        if (statusEl) { statusEl.textContent = 'Đang quét...'; statusEl.className = 'ap-row-status'; }
+        setStatus('Đang quét...', '');
 
-        // Lấy giá Binance hiện tại từ card bnPriceValue
-        const bnPriceEl = document.getElementById('bnPriceValue');
-        const bnPriceText = bnPriceEl ? bnPriceEl.textContent.replace(/[.,\s]/g, '') : '';
-        const bnPrice = parseFloat(bnPriceText);
-
-        if (!bnPrice || bnPrice < 100) {
-          if (statusEl) { statusEl.textContent = 'Chờ giá Binance'; statusEl.className = 'ap-row-status warn'; }
-          bgLog(`[${truncateId(advKey)}] Chưa có giá Binance`, 'warn');
+        // 1. Giá tham chiếu: BUY ad ← SELL market (giá cao nhất) ; SELL ad ← BUY market (giá thấp nhất)
+        const marketSide = isBuy ? 'sell' : 'buy';
+        let refPrice;
+        try {
+          refPrice = await bgFindBestMarketPrice(marketSide, row.searchAmount, row.advId, row.priceLimit, isBuy);
+        } catch (err) {
+          setStatus(`Lỗi lấy giá: ${err.message}`, 'err');
+          bgLog(`[${truncateId(row.advId)}] lỗi giá market: ${err.message}`, 'error');
+          continue;
+        }
+        if (refPrice === null) {
+          setStatus('Chưa có giá market', 'warn');
+          bgLog(`[${truncateId(row.advId)}] Chưa lấy được giá ${marketSide.toUpperCase()} market`, 'warn');
           continue;
         }
 
-        // Tính giá mới = giá Binance + offset
-        let newPrice = isBuy ? bnPrice + offsetBuy : bnPrice + offsetSell;
-
-        // Áp trần/sàn
-        if (cfg.priceLimit) {
-          const lim = parseFloat(cfg.priceLimit);
-          if (isBuy && newPrice > lim) newPrice = lim;
-          if (!isBuy && newPrice < lim) newPrice = lim;
+        // 2. Tra cứu ad hiện tại — lấy số lượng còn lại + payMethodIds
+        const info = await api.get(`/api/bitget/ad-info?advId=${row.advId}`);
+        if (info.code !== '00000' || !info.data) {
+          setStatus(`Lỗi ad-info: ${info.msg || 'không thấy'}`, 'err');
+          bgLog(`[${truncateId(row.advId)}] ad-info lỗi: ${info.msg || 'không thấy'}`, 'error');
+          continue;
         }
-
-        newPrice = Math.round(newPrice);
+        const ad = info.data;
         const currentPrice = parseFloat(ad.price);
+        const currentAvailable = parseFloat(ad.lastAmount) || 0;  // số lượng coin còn lại
 
-        if (newPrice === currentPrice) {
-          if (statusEl) { statusEl.textContent = `Giá OK: ${formatNumber(currentPrice)}`; statusEl.className = 'ap-row-status ok'; }
+        // 3. Tính giá mới = ref + offset (per-row ghi đè global)
+        const rowOffset = (row.offset !== '' && row.offset != null && !isNaN(parseFloat(row.offset)))
+          ? parseFloat(row.offset)
+          : (isBuy ? offsetBuy : offsetSell);
+        let newPrice = refPrice + rowOffset;
+
+        // Áp trần (BUY) / sàn (SELL)
+        if (row.priceLimit !== '' && row.priceLimit != null) {
+          const lim = parseFloat(row.priceLimit);
+          if (!isNaN(lim)) {
+            if (isBuy && newPrice > lim) newPrice = lim;
+            if (!isBuy && newPrice < lim) newPrice = lim;
+          }
+        }
+        newPrice = Math.round(newPrice);
+
+        // 4. Refill: nếu số lượng còn lại < ngưỡng refill → đặt quantity = refill SL
+        let quantity = (row.quantity !== '' && row.quantity != null) ? parseFloat(row.quantity) : currentAvailable;
+        const hasRefill = row.refillThreshold !== '' && row.refillThreshold != null
+                        && row.refillQuantity !== '' && row.refillQuantity != null;
+        if (hasRefill) {
+          const threshold = parseFloat(row.refillThreshold);
+          const refillTo = parseFloat(row.refillQuantity);
+          if (!isNaN(threshold) && !isNaN(refillTo) && currentAvailable < threshold) {
+            quantity = refillTo;
+            bgLog(`[${truncateId(row.advId)}] Refill: còn ${formatNumber(currentAvailable)} < ${formatNumber(threshold)} → SL=${formatNumber(refillTo)}`, 'warn');
+          }
+        }
+
+        // 5. Kiểm tra giá đổi VÀ không cần refill thì bỏ qua. Nếu cần refill thì vẫn update dù giá giữ nguyên.
+        const priceUnchanged = (newPrice === Math.round(currentPrice));
+        const needRefill = hasRefill && currentAvailable < parseFloat(row.refillThreshold);
+        if (priceUnchanged && !needRefill) {
+          setStatus(`Giá OK: ${formatNumber(currentPrice)}`, 'ok');
           continue;
         }
 
-        // Gọi Bitget Update Ad API
+        // 6. maxAmount: nếu quantity × giá > max → đặt max = quantity × giá; ngược lại giữ max người dùng nhập (lấy giá trị nhỏ hơn)
+        let maxAmount = (row.maxAmount !== '' && row.maxAmount != null) ? parseFloat(row.maxAmount) : null;
+        const capByQty = quantity * newPrice;
+        if (maxAmount === null) {
+          maxAmount = capByQty;
+        } else if (maxAmount > capByQty) {
+          maxAmount = capByQty;
+        }
+        maxAmount = Math.floor(maxAmount);
+
+        // 7. payMethodIds — đọc lại từ chính ad-info (đúng phương thức của ad này)
+        const payMethodIds = extractBgPayMethods(ad);
+        if (!payMethodIds.length) {
+          setStatus('Thiếu payMethodIds từ ad-info', 'err');
+          bgLog(`[${truncateId(row.advId)}] ad-info không có payMethodIds — không thể update`, 'error');
+          continue;
+        }
+
+        // 8. Build payload
+        const payTimeLimit = isBuy ? '30' : '10';
         const payload = {
-          advNo: ad.advId,
+          advId: row.advId,
+          priceType: 'fixed',
           price: String(newPrice),
-          coin: ad.token || 'USDT',
-          fiatCode: ad.fiat || 'VND',
-          type: ad.side,
-          amount: ad.lastAmount,
-          status: 'online',
+          payTimeLimit,
+          payMethodIds,
+          quantity: String(quantity),
+          maxAmount: String(maxAmount),
         };
+        if (row.minAmount !== '' && row.minAmount != null) payload.minAmount = String(row.minAmount);
 
         const result = await api.post('/api/bitget/ads/update', payload);
 
         if (result.code === '00000') {
-          ad.price = String(newPrice);
-          if (statusEl) { statusEl.textContent = `→ ${formatNumber(newPrice)}`; statusEl.className = 'ap-row-status ok'; }
-          bgLog(`[${truncateId(advKey)}] ${ad.side.toUpperCase()} | Binance: ${formatNumber(bnPrice)} → Mới: ${formatNumber(newPrice)}`, 'success');
-          cfg.lastStatus = `→ ${formatNumber(newPrice)}`;
+          setStatus(`→ ${formatNumber(newPrice)} | SL ${formatNumber(quantity)}`, 'ok');
+          bgLog(`[${truncateId(row.advId)}] ${row.side.toUpperCase()} | ref ${marketSide.toUpperCase()}: ${formatNumber(refPrice)} +${rowOffset} → ${formatNumber(newPrice)} | SL=${formatNumber(quantity)} | max=${formatNumber(maxAmount)}`, 'success');
         } else {
-          if (statusEl) { statusEl.textContent = `Lỗi: ${result.msg}`; statusEl.className = 'ap-row-status err'; }
-          bgLog(`[${truncateId(advKey)}] Lỗi: ${result.msg}`, 'error');
+          setStatus(`Lỗi: ${result.msg}`, 'err');
+          bgLog(`[${truncateId(row.advId)}] update lỗi: ${result.msg}`, 'error');
         }
       } catch (err) {
-        if (statusEl) { statusEl.textContent = `Lỗi: ${err.message}`; statusEl.className = 'ap-row-status err'; }
-        bgLog(`[${truncateId(advKey)}] ${err.message}`, 'error');
+        setStatus(`Lỗi: ${err.message}`, 'err');
+        bgLog(`[${truncateId(row.advId)}] ${err.message}`, 'error');
       }
     }
   }
 
+  function extractBgPayMethods(ad) {
+    const raw = ad.payMethodIds || ad.payMethods || [];
+    if (!Array.isArray(raw)) return [];
+    return raw.map(p => {
+      if (p == null) return null;
+      // Trường hợp phần tử là chuỗi/số phẳng: ["123"]
+      if (typeof p !== 'object') return { payMethodId: String(p) };
+      // Trường hợp object: lấy payMethodId + userPayMethodId nếu có
+      const pmId = p.payMethodId ?? p.payId ?? p.id;
+      if (pmId == null) return null;
+      const item = { payMethodId: String(pmId) };
+      const userPm = p.userPayMethodId ?? p.userPayId ?? p.userPaymentId;
+      if (userPm != null) item.userPayMethodId = String(userPm);
+      return item;
+    }).filter(Boolean);
+  }
+
   function startBitgetPricer() {
     if (bgApTimer) return;
-    const interval = Math.max(5, parseInt(document.getElementById('bgScanInterval').value) || 30) * 1000;
+    const interval = Math.max(1, parseInt(document.getElementById('bgScanInterval').value) || 30) * 1000;
     document.getElementById('bgApBadge').textContent = '▶ Đang chạy';
     document.getElementById('bgApBadge').className = 'ap-status-badge running';
     document.getElementById('bgStartBtn').style.display = 'none';
     document.getElementById('bgStopBtn').style.display = 'inline-flex';
     bgLog(`Bitget auto-pricer bắt đầu — quét mỗi ${interval / 1000}s`, 'success');
-    bgRunCycle();
-    bgApTimer = setInterval(bgRunCycle, interval);
+
+    const loop = async () => {
+      await bgRunCycle();
+      if (bgApTimer !== null) bgApTimer = setTimeout(loop, interval);
+    };
+    bgApTimer = setTimeout(loop, 0);  // chạy ngay vòng đầu
   }
 
   function stopBitgetPricer() {
-    if (bgApTimer) { clearInterval(bgApTimer); bgApTimer = null; }
+    if (bgApTimer) { clearTimeout(bgApTimer); bgApTimer = null; }
     document.getElementById('bgApBadge').textContent = '⏹ Đã dừng';
     document.getElementById('bgApBadge').className = 'ap-status-badge stopped';
     document.getElementById('bgStartBtn').style.display = 'inline-flex';
@@ -622,6 +942,8 @@ const App = (() => {
         updateConnectionUI(true, apiHost);
         showToast('Kết nối thành công!', 'success');
         await loadMyAds();
+        restoreMexcPricerConfig();   // ★ khôi phục cấu hình đã lưu
+        renderAutoPricerTable();     // ★ render lại để áp cấu hình
         await loadMarketAds('BUY');
         await loadMarketAds('SELL');
       } else {
@@ -1648,6 +1970,8 @@ const App = (() => {
   async function init() {
     // ★ MỚI: Load whitelist ngay khi khởi động (không cần kết nối)
     await loadWhitelist();
+    await loadSettings();        // ★ tải cấu hình đã lưu
+    prefillCredentials();        // ★ điền sẵn thông tin đăng nhập
 
     // ★ MỚI: Bắt đầu polling giá Binance
     startBinancePricePolling();
@@ -1657,6 +1981,8 @@ const App = (() => {
       state.connected = true;
       updateConnectionUI(true, '');
       await loadMyAds();
+      restoreMexcPricerConfig();   // ★
+      renderAutoPricerTable();     // ★
     }
     if (status.data?.secondaryConnected) {
       state.secondaryConnected = true;
@@ -1669,6 +1995,7 @@ const App = (() => {
       state.bgConnected = true;
       updateBgConnectionUI(true);
       await loadBitgetAds();
+      restoreBitgetPricerConfig(); // ★
     }
 
     const config = await api.get('/api/config');
@@ -1677,6 +2004,8 @@ const App = (() => {
       document.getElementById('apiHost').innerHTML = hosts;
       document.getElementById('apiHost2').innerHTML = hosts;
     }
+
+    renderBgApRows();
   }
 
   // ─── Public API ──────────────────────────────────────
@@ -1715,12 +2044,19 @@ const App = (() => {
     loadBitgetAds,
     startBitgetPricer,
     stopBitgetPricer,
-    bgApToggle,
-    bgApSetLimit,
     lookupBitgetAd,
     loadBgMarket,
     switchBgMarketTab,
     changeBgMarketPage,
+    submitBitgetUpdateAd,
+    clearBitgetUpdateForm,
+    bgApAddRow,
+    bgApRemoveRow,
+    bgApSetRow,
+    saveMexcCreds,
+    saveBitgetCreds,
+    saveMexcPricer,
+    saveBitgetPricer,
   };
 })();
 
