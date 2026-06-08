@@ -27,7 +27,7 @@
     </header>
 
     <!-- ★ MỚI: CARD GIÁ BINANCE P2P -->
-    <div class="card" id="binancePriceCard">
+    <!-- <div class="card" id="binancePriceCard">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -40,6 +40,39 @@
         <span style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--green)" id="bnPriceValue">—</span>
         <span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)" id="bnPriceTime">Chưa cập nhật</span>
         <a href="https://www.pricedancing.com/vi/Binance-P2P-USDT-VND-chart-ZqzaQWc" target="_blank" style="margin-left:auto;font-size:11px;color:var(--accent-blue);text-decoration:none">Xem biểu đồ ↗</a>
+      </div>
+    </div> -->
+
+    <!-- ★ KHUNG GIÁ THỊ TRƯỜNG (MEXC + Bitget) -->
+    <div class="card" id="priceBoardCard">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l3-3 4 4 5-6"/></svg>
+        Giá thị trường P2P
+        <span class="card-subtitle">USDT/VND · MUA cao nhất · BÁN thấp nhất</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+          <div class="filter-input-unit">
+            <input type="number" id="pbAmount" class="filter-input" value="20000000" min="0" step="100000" onchange="App.refreshPriceBoard()">
+            <span class="filter-unit">VND</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="App.refreshPriceBoard()">Làm mới</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Sàn</th><th>MUA (cao nhất)</th><th>BÁN (thấp nhất)</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>MEXC</strong></td>
+              <td id="pbMexcBuy" class="mono-cell price-value price-buy">—</td>
+              <td id="pbMexcSell" class="mono-cell price-value price-sell">—</td>
+            </tr>
+            <tr>
+              <td><strong>Bitget</strong></td>
+              <td id="pbBitgetBuy" class="mono-cell price-value price-buy">—</td>
+              <td id="pbBitgetSell" class="mono-cell price-value price-sell">—</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 

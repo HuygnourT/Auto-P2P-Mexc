@@ -64,6 +64,7 @@ const App = (() => {
 
   // ★ MỚI: Binance price polling
   let bnPriceTimer = null;
+  let pbTimer = null;
   let bnCountdown = 60;
 
   // ★ MỚI: Bitget auto-pricer timer
@@ -311,6 +312,66 @@ function restoreBitgetPricerConfig() {
     }, 1000);
   }
 
+  // Lấy giá tốt nhất MEXC cho khung hiển thị. undefined = chưa kết nối, null = không có giá.
+async function fetchMexcBest(side, amount) {
+  if (!state.secondaryConnected) return undefined;
+  const amountParam = amount > 0 ? `&amount=${amount}` : '';
+  try {
+    const r = await api.get(`/api/market/ads?side=${side}&fiatUnit=VND&page=1&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN${amountParam}`);
+    if (r.code !== 0) return null;
+    let best = null;
+    for (const ad of (r.data || [])) {
+      const p = parseFloat(ad.price);
+      if (isNaN(p)) continue;
+      best = best === null ? p : (side === 'BUY' ? Math.max(best, p) : Math.min(best, p));
+    }
+    return best;
+  } catch (_) { return null; }
+}
+
+async function fetchBitgetBest(side, amount) {
+  if (!state.bgConnected) return undefined;
+  const amountParam = amount > 0 ? `&amount=${amount}` : '';
+  try {
+    const r = await api.get(`/api/bitget/market?side=${side}&token=USDT&fiat=VND&pageNum=1&limit=10${amountParam}`);
+    if (r.code !== '00000') return null;
+    let best = null;
+    for (const ad of r.data.items) {
+      const p = parseFloat(ad.price);
+      if (isNaN(p)) continue;
+      best = best === null ? p : (side === 'buy' ? Math.min(best, p) : Math.max(best, p));
+    }
+    return best;
+  } catch (_) { return null; }
+}
+
+function setPbCell(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (value === undefined) el.textContent = 'Chưa kết nối';
+  else if (value === null) el.textContent = '—';
+  else el.textContent = formatNumber(value);
+}
+
+async function refreshPriceBoard() {
+  const amount = parseFloat(document.getElementById('pbAmount')?.value) || 0;
+  const [mb, ms, bb, bs] = await Promise.all([
+    fetchMexcBest('BUY', amount),
+    fetchMexcBest('SELL', amount),
+    fetchBitgetBest('sell', amount),
+    fetchBitgetBest('buy', amount),
+  ]);
+  setPbCell('pbMexcBuy', mb);
+  setPbCell('pbMexcSell', ms);
+  setPbCell('pbBitgetBuy', bb);
+  setPbCell('pbBitgetSell', bs);
+}
+
+function startPriceBoardPolling() {
+  refreshPriceBoard();
+  pbTimer = setInterval(refreshPriceBoard, 15000);  // tự cập nhật mỗi 15s
+}
+
   // ═══════════════════════════════════════════════════════
   // ★ MỚI: BITGET P2P
   // ═══════════════════════════════════════════════════════
@@ -443,6 +504,8 @@ function restoreBitgetPricerConfig() {
         showToast('Bitget kết nối thành công!', 'success');
         await loadBitgetAds();
         restoreBitgetPricerConfig();  // ★ khôi phục cấu hình đã lưu
+
+        refreshPriceBoard();
       } else {
         showToast(r.msg || 'Bitget kết nối thất bại', 'error');
       }
@@ -992,6 +1055,8 @@ function restoreBitgetPricerConfig() {
         showToast('Kết nối phụ thành công!', 'success');
         await loadMarketAds('BUY');
         await loadMarketAds('SELL');
+
+        refreshPriceBoard();
       } else {
         showToast(result.msg || 'Kết nối phụ thất bại', 'error');
       }
@@ -1974,7 +2039,9 @@ function restoreBitgetPricerConfig() {
     prefillCredentials();        // ★ điền sẵn thông tin đăng nhập
 
     // ★ MỚI: Bắt đầu polling giá Binance
-    startBinancePricePolling();
+    // startBinancePricePolling();
+
+    startPriceBoardPolling();
 
     const status = await api.get('/api/status');
     if (status.data?.connected) {
@@ -2057,6 +2124,7 @@ function restoreBitgetPricerConfig() {
     saveBitgetCreds,
     saveMexcPricer,
     saveBitgetPricer,
+    refreshPriceBoard
   };
 })();
 
