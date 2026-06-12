@@ -60,6 +60,7 @@ const App = (() => {
 
     byConnected: false,
     byAds: [],
+    byApRows: [],   // [{ id, side, advId, tokenId, currencyId, searchAmount, offset, priceLimit, refill, enabled, lastStatus }]
   };
 
   // Timer auto-refresh (handle của setInterval)
@@ -73,6 +74,9 @@ const App = (() => {
   // ★ MỚI: Bitget auto-pricer timer
   let bgApTimer = null;
   let bgApRowSeq = 1;
+
+  let byApTimer = null;
+  let byApRowSeq = 1;
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
@@ -295,6 +299,21 @@ function restoreBitgetPricerConfig() {
     state.bgApRows = saved.rows.map(r => ({ ...r, lastStatus: '' }));  // giữ enabled, reset trạng thái
     bgApRowSeq = Math.max(0, ...state.bgApRows.map(r => r.id || 0)) + 1;
     renderBgApRows();
+  }
+}
+
+// Khôi phục cấu hình auto-pricer Bybit sau khi connect (KHÔNG tự chạy)
+function restoreBybitPricerConfig() {
+  const saved = state.savedSettings?.bybitPricer;
+  if (!saved) return;
+  if (saved.scanInterval) {
+    const el = document.getElementById('byScanInterval');
+    if (el) el.value = saved.scanInterval;
+  }
+  if (Array.isArray(saved.rows) && saved.rows.length) {
+    state.byApRows = saved.rows.map(r => ({ ...r, lastStatus: '' }));  // giữ cấu hình, reset trạng thái
+    byApRowSeq = Math.max(0, ...state.byApRows.map(r => r.id || 0)) + 1;
+    renderByApRows();
   }
 }
 
@@ -1015,6 +1034,7 @@ function startPriceBoardPolling() {
       updateBybitUI(true);
       showToast('Đã kết nối Bybit', 'success');
       await loadBybitAds();
+      restoreBybitPricerConfig();   // ★ khôi phục cấu hình đã lưu
     } else {
       showToast('Lỗi: ' + (r.msg || 'Kết nối thất bại'), 'error');
     }
@@ -1189,6 +1209,267 @@ function renderBybitAds() {
       box.style.display = 'block'; txt.textContent = err.message;
       showToast('Lỗi: ' + err.message, 'error');
     } finally { setLoading(false, 'byUpBtn'); }
+  }
+
+  function byApAddRow() {
+    state.byApRows.push({
+      id: byApRowSeq++, side: 'buy', advId: '', tokenId: 'USDT', currencyId: 'VND',
+      searchAmount: '', offset: '', priceLimit: '', refill: '',
+      minAmount: '', maxAmount: '',
+      enabled: false, lastStatus: ''
+    });
+    renderByApRows();
+  }
+
+  function byApRemoveRow(id) { state.byApRows = state.byApRows.filter(r => r.id !== id); renderByApRows(); }
+
+  function byApSetRow(id, field, value) {
+    const row = state.byApRows.find(r => r.id === id);
+    if (!row) return;
+    row[field] = value;
+    if (field === 'side') renderByApRows();
+  }
+
+  function renderByApRows() {
+    const tbody = document.getElementById('byApTableBody');
+    if (!tbody) return;
+    if (!state.byApRows.length) {
+      tbody.innerHTML = '<tr><td colspan="13" class="ap-empty">Chưa có dòng nào.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.byApRows.map(r => {
+      const isSell = r.side === 'sell';
+      return `<tr id="by-ap-row-${r.id}">
+        <td><select class="ap-num-input" style="width:80px" onchange="App.byApSetRow(${r.id},'side',this.value)">
+          <option value="buy" ${!isSell ? 'selected' : ''}>MUA</option>
+          <option value="sell" ${isSell ? 'selected' : ''}>BÁN</option></select></td>
+        <td><input type="text" class="ap-num-input" style="width:160px" value="${escapeHtml(r.advId)}" placeholder="Ad ID" onchange="App.byApSetRow(${r.id},'advId',this.value.trim())"></td>
+        <td><input type="text" class="ap-num-input" style="width:60px" value="${escapeHtml(r.tokenId)}" onchange="App.byApSetRow(${r.id},'tokenId',this.value.trim())"></td>
+        <td><input type="text" class="ap-num-input" style="width:60px" value="${escapeHtml(r.currencyId)}" onchange="App.byApSetRow(${r.id},'currencyId',this.value.trim())"></td>
+        <td><label class="toggle"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="App.byApSetRow(${r.id},'enabled',this.checked)"><span class="toggle-slider"></span></label></td>
+        <td><input type="number" class="ap-num-input" style="width:110px" value="${r.searchAmount}" placeholder="—" onchange="App.byApSetRow(${r.id},'searchAmount',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:80px" value="${r.offset}" placeholder="0" onchange="App.byApSetRow(${r.id},'offset',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.priceLimit}" placeholder="${isSell ? 'Sàn' : 'Trần'}" onchange="App.byApSetRow(${r.id},'priceLimit',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.minAmount}" placeholder="—" onchange="App.byApSetRow(${r.id},'minAmount',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.maxAmount}" placeholder="—" onchange="App.byApSetRow(${r.id},'maxAmount',this.value)"></td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.refill}" placeholder="${isSell ? '0' : 'N/A'}" ${isSell ? '' : 'disabled'} onchange="App.byApSetRow(${r.id},'refill',this.value)"></td>
+        <td><span class="ap-row-status" id="by-ap-status-${r.id}">${escapeHtml(r.lastStatus) || '—'}</span></td>
+        <td><button class="btn-remove" style="padding:4px 10px;font-size:11px;border-radius:4px;border:1px solid rgba(239,68,68,0.3);background:rgba(255,255,255,0.04);color:var(--red);cursor:pointer" onclick="App.byApRemoveRow(${r.id})">Xóa</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Lấy & cache ads thị trường 1 lần/vòng theo cặp token-fiat-side
+  async function byFetchMarket(cache, tokenId, currencyId, side) {
+    const key = `${tokenId}|${currencyId}|${side}`;
+    if (cache[key]) return cache[key];
+    const r = await api.post('/api/bybit/online-ads', { tokenId, currencyId, side, size: '50' });
+    const items = (r.ret_code === 0 && r.result?.items) ? r.result.items : [];
+    cache[key] = items;
+    return items;
+  }
+
+  // Tìm giá tốt nhất từ ads thị trường đã cache, áp các bộ lọc
+  // wantMax=true → giá cao nhất (BUY ad tham chiếu SELL market); false → thấp nhất
+  function byPickBest(items, { reqAmount, priceLimit, isBuyAd, wantMax, selfId }) {
+    const hasLimit = priceLimit !== '' && priceLimit != null && !isNaN(parseFloat(priceLimit));
+    const lim = hasLimit ? parseFloat(priceLimit) : null;
+    const prices = [];
+    for (const ad of items) {
+      if (selfId && String(ad.id) === String(selfId)) continue;   // bỏ qua ad của chính mình
+      if (ad.isOnline !== true) continue;                          // chỉ ads đang online
+      const p = parseFloat(ad.price);
+      if (isNaN(p)) continue;
+      // Lọc trần/sàn: BUY bỏ giá > trần; SELL bỏ giá < sàn
+      if (hasLimit) {
+        if (isBuyAd && p > lim) continue;
+        if (!isBuyAd && p < lim) continue;
+      }
+      // Số lượng giao dịch phải nằm trong [minAmount, maxAmount] của ad
+      if (reqAmount > 0) {
+        const mn = parseFloat(ad.minAmount), mx = parseFloat(ad.maxAmount);
+        if (!isNaN(mn) && reqAmount < mn) continue;
+        if (!isNaN(mx) && reqAmount > mx) continue;
+      }
+      prices.push(p);
+    }
+    if (!prices.length) return null;
+    return wantMax ? Math.max(...prices) : Math.min(...prices);
+  }
+
+  async function byRunCycle() {
+    const rows = state.byApRows.filter(r => r.enabled && r.advId);
+    if (!rows.length) return;
+
+    // Cố định USDT/VND — chỉ cần lấy 2 chiều market mỗi vòng
+    const TOKEN = 'USDT', FIAT = 'VND';
+
+    // Chỉ gọi chiều nào thực sự có ad cần đến (tránh gọi thừa)
+    const needSell = rows.some(r => r.side === 'sell');   // BUY ad ← SELL market
+    const needBuy  = rows.some(r => r.side === 'buy');  // SELL ad ← BUY market
+
+    let sellMarket = [], buyMarket = [];
+    try {
+      if (needSell) {
+        const r = await api.post('/api/bybit/online-ads', { tokenId: TOKEN, currencyId: FIAT, side: '1', size: '50' });
+        sellMarket = (r.ret_code === 0 && r.result?.items) ? r.result.items : [];
+        byLog(`Market SELL: ${sellMarket.length} ads`, '');
+      }
+      if (needBuy) {
+        const r = await api.post('/api/bybit/online-ads', { tokenId: TOKEN, currencyId: FIAT, side: '0', size: '50' });
+        buyMarket = (r.ret_code === 0 && r.result?.items) ? r.result.items : [];
+        byLog(`Market BUY: ${buyMarket.length} ads`, '');
+      }
+    } catch (err) {
+      byLog(`Lỗi lấy market: ${err.message}`, 'error');
+      return;
+    }
+
+    for (const row of rows) {
+      const isBuy = row.side === 'buy';
+      const statusEl = document.getElementById(`by-ap-status-${row.id}`);
+      const setStatus = (msg, type) => {
+        row.lastStatus = msg;
+        if (statusEl) { statusEl.textContent = msg; statusEl.className = `ap-row-status${type ? ' ' + type : ''}`; }
+      };
+
+      console.log("Đang quét ads : " + row.id + " " + row.side);
+
+      try {
+        setStatus('Đang quét...', '');
+
+        // BUY ad đọc SELL market; SELL ad đọc BUY market
+        // const items = isBuy ? sellMarket : buyMarket;
+        const items = isBuy ? buyMarket : sellMarket;
+        if (!items.length) { setStatus('Market rỗng', 'warn'); continue; }
+
+        const reqAmount = parseFloat(row.searchAmount) || 0;
+        const refPrice = byPickBest(items, {
+          reqAmount, priceLimit: row.priceLimit, isBuyAd: isBuy, wantMax: isBuy, selfId: row.advId,
+        });
+        if (refPrice === null) { setStatus('Không có giá phù hợp', 'warn'); continue; }
+
+        // Giá mới = ref + offset, rồi clamp trần/sàn
+        const offset = parseFloat(row.offset) || 0;
+        let newPrice = refPrice + offset;
+        if (row.priceLimit !== '' && !isNaN(parseFloat(row.priceLimit))) {
+          const lim = parseFloat(row.priceLimit);
+          if (isBuy && newPrice > lim) newPrice = lim;
+          if (!isBuy && newPrice < lim) newPrice = lim;
+        }
+
+        // Ad của mình từ cache (cần các field bắt buộc khi update)
+        const myAd = (state.byAds || []).find(a => String(a.id) === String(row.advId));
+        if (!myAd) { setStatus('Ad không có trong My Ads — bấm Tải lại', 'err'); continue; }
+        const scale = myAd.symbolInfo?.currency?.scale ?? 2;
+        newPrice = (+newPrice).toFixed(scale);
+
+        // Quantity + nguồn ad cho min/max/remark...
+        let quantity;
+        let srcAd = myAd;
+        if (isBuy) {
+          quantity = '20000';   // BUY luôn 20000
+        } else {
+          // SELL: gọi Get My Ads lấy số mới nhất → lastQuantity - frozenQuantity (+ refill)
+          const fresh = await api.get('/api/bybit/my-ads');
+          const freshAd = (fresh.ret_code === 0 ? (fresh.result?.items || []) : [])
+            .find(a => String(a.id) === String(row.advId));
+          if (!freshAd) { setStatus('SELL: không lấy được số lượng mới', 'err'); continue; }
+          srcAd = freshAd;   // SELL dùng ad tươi cho cả min/max
+          const avail = (parseFloat(freshAd.lastQuantity) || 0) - (parseFloat(freshAd.frozenQuantity) || 0);
+          const refillAmt = parseFloat(row.refill) || 0;
+          quantity = String(Math.max(0, avail + refillAmt));
+        }
+
+        // Min/Max: ưu tiên giá trị nhập trên dòng, fallback về ad
+        const minAmount = (row.minAmount !== '' && row.minAmount != null)
+          ? String(row.minAmount) : String(srcAd.minAmount ?? '');
+        const maxAmount = (row.maxAmount !== '' && row.maxAmount != null)
+          ? String(row.maxAmount) : String(srcAd.maxAmount ?? '');
+
+        if (!minAmount || !maxAmount) {
+          setStatus('Thiếu Min/Max — nhập vào dòng', 'err');
+          byLog(`[${truncateId(row.advId)}] thiếu minAmount/maxAmount, không update`, 'error');
+          continue;
+        }
+
+        const payload = {
+          id: row.advId,
+          priceType: String(srcAd.priceType ?? 0),
+          premium: String(srcAd.premium ?? ''),
+          price: String(newPrice),
+          minAmount,
+          maxAmount,
+          remark: srcAd.remark ?? '',
+          tradingPreferenceSet: {},
+          paymentIds: ['23871618', '23871387'],   // cố định
+          actionType: 'MODIFY',
+          quantity,
+          paymentPeriod: String(srcAd.paymentPeriod ?? 15),
+        };
+
+        const result = await api.post('/api/bybit/ads/update', payload);
+        if (result.ret_code === 0) {
+          setStatus(`→ ${newPrice} | SL ${formatNumber(parseFloat(quantity))}`, 'ok');
+          byLog(`[${truncateId(row.advId)}] ${row.side.toUpperCase()} ref ${isBuy ? 'SELL' : 'BUY'}: ${refPrice} +${offset} → ${newPrice} | SL=${quantity}`, 'success');
+          // Reset refill về 0 sau khi SELL thành công
+          if (!isBuy && (parseFloat(row.refill) || 0) > 0) {
+            row.refill = '';
+            renderByApRows();
+          }
+        } else {
+          setStatus(`Lỗi: ${result.ret_msg}`, 'err');
+          byLog(`[${truncateId(row.advId)}] update lỗi: ${result.ret_msg}`, 'error');
+        }
+      } catch (err) {
+        setStatus(`Lỗi: ${err.message}`, 'err');
+        byLog(`[${truncateId(row.advId)}] ${err.message}`, 'error');
+      }
+    }
+  }
+
+  function byLog(msg, type) {
+    const box = document.getElementById('byLog');
+    if (!box) return;
+    const empty = box.querySelector('.ap-log-empty');
+    if (empty) empty.remove();
+    const time = new Date().toLocaleTimeString('vi-VN');
+    const div = document.createElement('div');
+    div.className = `ap-log-line${type ? ' ' + type : ''}`;
+    div.textContent = `[${time}] ${msg}`;
+    box.insertBefore(div, box.firstChild);
+    while (box.children.length > 100) box.removeChild(box.lastChild);
+  }
+
+  function startBybitPricer() {
+    if (byApTimer) return;
+    const interval = Math.max(1, parseInt(document.getElementById('byScanInterval').value) || 30) * 1000;
+    document.getElementById('byApBadge').textContent = '▶ Đang chạy';
+    document.getElementById('byApBadge').className = 'ap-status-badge running';
+    document.getElementById('byStartBtn').style.display = 'none';
+    document.getElementById('byStopBtn').style.display = 'inline-flex';
+    byLog(`Auto-pricer Bybit bắt đầu — quét mỗi ${interval / 1000}s`, 'success');
+    const loop = async () => {
+      await byRunCycle();
+      if (byApTimer !== null) byApTimer = setTimeout(loop, interval);
+    };
+    byApTimer = setTimeout(loop, 0);
+  }
+
+  function stopBybitPricer() {
+    if (byApTimer) { clearTimeout(byApTimer); byApTimer = null; }
+    document.getElementById('byApBadge').textContent = '⏹ Đã dừng';
+    document.getElementById('byApBadge').className = 'ap-status-badge stopped';
+    document.getElementById('byStartBtn').style.display = 'inline-flex';
+    document.getElementById('byStopBtn').style.display = 'none';
+    byLog('Auto-pricer Bybit đã dừng', 'warn');
+  }
+
+  async function saveBybitPricer() {
+    const data = { scanInterval: document.getElementById('byScanInterval').value, rows: state.byApRows };
+    const r = await api.post('/api/settings/bybitPricer', data);
+    if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu cấu hình auto-pricer Bybit', 'success'); }
+    else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
   }
 
   // ─── Kết nối / Ngắt kết nối ──────────────────────────
@@ -2272,6 +2553,13 @@ function renderBybitAds() {
       restoreBitgetPricerConfig(); // ★
     }
 
+    if (status.data?.bybitConnected) {
+      state.byConnected = true;
+      updateBybitUI(true);
+      await loadBybitAds();
+      restoreBybitPricerConfig();   // ★
+    }
+
     const config = await api.get('/api/config');
     if (config.data?.apiHosts) {
       const hosts = config.data.apiHosts.map(h => `<option value="${h.value}">${h.label}</option>`).join('');
@@ -2340,6 +2628,12 @@ function renderBybitAds() {
     loadBybitAdIntoForm,
     loadBybitPayments,
     submitBybitUpdate,
+    byApAddRow, 
+    byApRemoveRow,
+    byApSetRow,
+    startBybitPricer,
+    stopBybitPricer, 
+    saveBybitPricer,
   };
 })();
 

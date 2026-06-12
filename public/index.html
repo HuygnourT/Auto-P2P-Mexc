@@ -117,6 +117,34 @@
       </div>
     </div>
 
+    <div class="card" id="bybitCard">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        Bybit P2P
+        <span class="card-subtitle" id="byConnStatus">Chưa kết nối</span>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>API Key</label><input type="text" id="byApiKey" spellcheck="false"></div>
+        <div class="form-group"><label>API Secret</label><input type="password" id="byApiSecret" spellcheck="false"></div>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-primary" id="byConnectBtn" onclick="App.connectBybit()">Kết nối</button>
+        <button class="btn btn-danger" id="byDisconnectBtn" style="display:none" onclick="App.disconnectBybit()">Ngắt</button>
+        <button class="btn btn-ghost" onclick="App.saveBybitCreds()">💾 Lưu đăng nhập</button>
+      </div>
+      <div id="byAdsSection" style="display:none;margin-top:16px">
+        <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo của tôi
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
+            <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- CARD: QUẢNG CÁO CỦA TÔI (MEXC) -->
     <div class="card" id="myAdsCard">
       <div class="card-title">
@@ -405,35 +433,30 @@
     </div>
   </div> -->
 
-    <div class="card" id="bybitCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-        Bybit P2P
-        <span class="card-subtitle" id="byConnStatus">Chưa kết nối</span>
+    <div style="margin-top:16px">
+      <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bybit
+        <span class="card-subtitle">BUY ← giá SELL · SELL ← giá BUY · cache giá mỗi vòng</span>
       </div>
-      <div class="form-grid">
-        <div class="form-group"><label>API Key</label><input type="text" id="byApiKey" spellcheck="false"></div>
-        <div class="form-group"><label>API Secret</label><input type="password" id="byApiSecret" spellcheck="false"></div>
+      <div class="ap-controls">
+        <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="byScanInterval" class="filter-input" value="30" min="1" step="1"><span class="filter-unit">giây</span></div></div>
+        <button class="btn btn-ghost btn-sm" onclick="App.byApAddRow()">➕ Thêm dòng</button>
+        <button class="btn btn-primary btn-sm" id="byStartBtn" onclick="App.startBybitPricer()">▶ Bắt đầu</button>
+        <button class="btn btn-danger btn-sm" id="byStopBtn" style="display:none" onclick="App.stopBybitPricer()">⏹ Dừng</button>
+        <button class="btn btn-ghost btn-sm" onclick="App.saveBybitPricer()">💾 Lưu cấu hình</button>
+        <span class="ap-status-badge stopped" id="byApBadge">⏹ Đã dừng</span>
       </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-primary" id="byConnectBtn" onclick="App.connectBybit()">Kết nối</button>
-        <button class="btn btn-danger" id="byDisconnectBtn" style="display:none" onclick="App.disconnectBybit()">Ngắt</button>
-        <button class="btn btn-ghost" onclick="App.saveBybitCreds()">💾 Lưu đăng nhập</button>
+      <div class="ap-table-wrap">
+        <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần/Sàn</th><th>Min</th><th>Max</th><th>Refill (Sell)</th><th>Trạng thái</th><th></th></tr></thead>
+          <tbody id="byApTableBody"><tr><td colspan="13" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
+        </table>
       </div>
-      <div id="byAdsSection" style="display:none;margin-top:16px">
-        <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo của tôi
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
-            <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
-          </table>
-        </div>
+      <div style="margin-top:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bybit</label>
+        <div class="ap-log" id="byLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
       </div>
     </div>
 
-    <div style="margin-top:16px">
+    <!-- <div style="margin-top:16px">
       <div class="card-title" style="font-size:12px;margin-bottom:12px">Test lấy Ads thị trường
         <span class="card-subtitle">POST /v5/p2p/item/online</span>
       </div>
@@ -490,7 +513,7 @@
         <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Response</label>
         <pre id="byUpResponseText" style="margin-top:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto"></pre>
       </div>
-    </div>
+    </div> -->
 
   <div class="toast-container" id="toastContainer"></div>
   <script src="/js/app.js"></script>
