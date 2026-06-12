@@ -71,6 +71,11 @@
               <td id="pbBitgetBuy" class="mono-cell price-value price-buy">—</td>
               <td id="pbBitgetSell" class="mono-cell price-value price-sell">—</td>
             </tr>
+            <tr>
+              <td><strong>Bybit</strong></td>
+              <td id="pbBybitBuy" class="mono-cell price-value price-buy">—</td>
+              <td id="pbBybitSell" class="mono-cell price-value price-sell">—</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -440,6 +445,10 @@
       <div class="ap-controls">
         <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="byScanInterval" class="filter-input" value="30" min="1" step="1"><span class="filter-unit">giây</span></div></div>
         <button class="btn btn-ghost btn-sm" onclick="App.byApAddRow()">➕ Thêm dòng</button>
+          <label class="filter-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="byOnlineOnly" checked>
+            Chỉ ads online
+          </label>
         <button class="btn btn-primary btn-sm" id="byStartBtn" onclick="App.startBybitPricer()">▶ Bắt đầu</button>
         <button class="btn btn-danger btn-sm" id="byStopBtn" style="display:none" onclick="App.stopBybitPricer()">⏹ Dừng</button>
         <button class="btn btn-ghost btn-sm" onclick="App.saveBybitPricer()">💾 Lưu cấu hình</button>

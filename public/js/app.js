@@ -368,48 +368,84 @@ async function fetchMexcBest(side, amount) {
   } catch (_) { return null; }
 }
 
-async function fetchBitgetBest(side, amount) {
-  if (!state.bgConnected) return undefined;
-  const amountParam = amount > 0 ? `&amount=${amount}` : '';
-  try {
-    const r = await api.get(`/api/bitget/market?side=${side}&token=USDT&fiat=VND&pageNum=1&limit=10${amountParam}`);
-    if (r.code !== '00000') return null;
-    let best = null;
-    for (const ad of r.data.items) {
-      const p = parseFloat(ad.price);
-      if (isNaN(p)) continue;
-      best = best === null ? p : (side === 'buy' ? Math.min(best, p) : Math.max(best, p));
+  async function fetchBitgetBest(side, amount) {
+    if (!state.bgConnected) return undefined;
+    const amountParam = amount > 0 ? `&amount=${amount}` : '';
+    try {
+      const r = await api.get(`/api/bitget/market?side=${side}&token=USDT&fiat=VND&pageNum=1&limit=10${amountParam}`);
+      if (r.code !== '00000') return null;
+      let best = null;
+      for (const ad of r.data.items) {
+        const p = parseFloat(ad.price);
+        if (isNaN(p)) continue;
+        best = best === null ? p : (side === 'buy' ? Math.min(best, p) : Math.max(best, p));
+      }
+      return best;
+    } catch (_) { return null; }
+  }
+
+// undefined = chưa kết nối, null = không có giá
+  async function fetchBybitBest(uiSide, amount) {
+    if (!state.byConnected) return undefined;
+    // Bybit market side: '0' = buy, '1' = sell
+    const side = uiSide === 'buy' ? '0' : '1';
+    try {
+      const r = await api.post('/api/bybit/online-ads', {
+        tokenId: 'USDT', currencyId: 'VND', side, size: '50',
+      });
+      if (r.ret_code !== 0) return null;
+      const items = r.result?.items || [];
+      const reqAmount = amount > 0 ? amount : 0;
+      let best = null;
+      for (const ad of items) {
+        if (ad.isOnline !== true) continue;
+        const p = parseFloat(ad.price);
+        if (isNaN(p)) continue;
+        // lọc theo số lượng giao dịch nếu có
+        if (reqAmount > 0) {
+          const mn = parseFloat(ad.minAmount), mx = parseFloat(ad.maxAmount);
+          if (!isNaN(mn) && reqAmount < mn) continue;
+          if (!isNaN(mx) && reqAmount > mx) continue;
+        }
+        best = best === null ? p : (uiSide === 'buy' ? Math.max(best, p) : Math.min(best, p));
+      }
+      return best;
+    } catch (err) {
+      console.error('[PriceBoard Bybit] error:', err);
+      return null;
     }
-    return best;
-  } catch (_) { return null; }
-}
+  }
 
-function setPbCell(id, value) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  if (value === undefined) el.textContent = 'Chưa kết nối';
-  else if (value === null) el.textContent = '—';
-  else el.textContent = formatNumber(value);
-}
+  function setPbCell(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (value === undefined) el.textContent = 'Chưa kết nối';
+    else if (value === null) el.textContent = '—';
+    else el.textContent = formatNumber(value);
+  }
 
-async function refreshPriceBoard() {
-  const amount = parseFloat(document.getElementById('pbAmount')?.value) || 0;
-  const [mb, ms, bb, bs] = await Promise.all([
-    fetchMexcBest('BUY', amount),
-    fetchMexcBest('SELL', amount),
-    fetchBitgetBest('sell', amount),
-    fetchBitgetBest('buy', amount),
-  ]);
-  setPbCell('pbMexcBuy', mb);
-  setPbCell('pbMexcSell', ms);
-  setPbCell('pbBitgetBuy', bb);
-  setPbCell('pbBitgetSell', bs);
-}
+  async function refreshPriceBoard() {
+    const amount = parseFloat(document.getElementById('pbAmount')?.value) || 0;
+    const [mb, ms, bb, bs, yb, ys] = await Promise.all([
+      fetchMexcBest('BUY', amount),
+      fetchMexcBest('SELL', amount),
+      fetchBitgetBest('buy', amount),
+      fetchBitgetBest('sell', amount),
+      fetchBybitBest('buy', amount),
+      fetchBybitBest('sell', amount),
+    ]);
+    setPbCell('pbMexcBuy', mb);
+    setPbCell('pbMexcSell', ms);
+    setPbCell('pbBitgetBuy', bb);
+    setPbCell('pbBitgetSell', bs);
+    setPbCell('pbBybitBuy', yb);
+    setPbCell('pbBybitSell', ys);
+  }
 
-function startPriceBoardPolling() {
-  refreshPriceBoard();
-  pbTimer = setInterval(refreshPriceBoard, 15000);  // tự cập nhật mỗi 15s
-}
+  function startPriceBoardPolling() {
+    refreshPriceBoard();
+    pbTimer = setInterval(refreshPriceBoard, 15000);  // tự cập nhật mỗi 15s
+  }
 
   // ═══════════════════════════════════════════════════════
   // ★ MỚI: BITGET P2P
@@ -1273,13 +1309,14 @@ function renderBybitAds() {
 
   // Tìm giá tốt nhất từ ads thị trường đã cache, áp các bộ lọc
   // wantMax=true → giá cao nhất (BUY ad tham chiếu SELL market); false → thấp nhất
-  function byPickBest(items, { reqAmount, priceLimit, isBuyAd, wantMax, selfId }) {
+  function byPickBest(items, { reqAmount, priceLimit, isBuyAd, wantMax, selfId, onlineOnly  }) {
     const hasLimit = priceLimit !== '' && priceLimit != null && !isNaN(parseFloat(priceLimit));
     const lim = hasLimit ? parseFloat(priceLimit) : null;
     const prices = [];
     for (const ad of items) {
       if (selfId && String(ad.id) === String(selfId)) continue;   // bỏ qua ad của chính mình
-      if (ad.isOnline !== true) continue;                          // chỉ ads đang online
+      //if (ad.isOnline !== true) continue;                          // chỉ ads đang online
+      if (onlineOnly && ad.isOnline !== true) continue;   // chỉ lọc online khi cờ bật
       const p = parseFloat(ad.price);
       if (isNaN(p)) continue;
       // Lọc trần/sàn: BUY bỏ giá > trần; SELL bỏ giá < sàn
@@ -1309,6 +1346,8 @@ function renderBybitAds() {
     // Chỉ gọi chiều nào thực sự có ad cần đến (tránh gọi thừa)
     const needSell = rows.some(r => r.side === 'sell');   // BUY ad ← SELL market
     const needBuy  = rows.some(r => r.side === 'buy');  // SELL ad ← BUY market
+
+    const onlineOnly = document.getElementById('byOnlineOnly')?.checked ?? true;   // ★ đặt ở đây
 
     let sellMarket = [], buyMarket = [];
     try {
@@ -1345,7 +1384,7 @@ function renderBybitAds() {
 
         const reqAmount = parseFloat(row.searchAmount) || 0;
         const refPrice = byPickBest(items, {
-          reqAmount, priceLimit: row.priceLimit, isBuyAd: isBuy, wantMax: isBuy, selfId: row.advId,
+          reqAmount, priceLimit: row.priceLimit, isBuyAd: isBuy, wantMax: isBuy, selfId: row.advId, onlineOnly: onlineOnly 
         });
         if (refPrice === null) { setStatus('Không có giá phù hợp', 'warn'); continue; }
 
