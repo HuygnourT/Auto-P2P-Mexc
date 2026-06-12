@@ -57,6 +57,9 @@ const App = (() => {
     bgMarketSellPage: 1,
     // ★ Bitget auto-pricer: danh sách dòng cấu hình tùy chỉnh
     bgApRows: [],   // [{ id, side:'buy'|'sell', advId, priceLimit, enabled, lastStatus }]
+
+    byConnected: false,
+    byAds: [],
   };
 
   // Timer auto-refresh (handle của setInterval)
@@ -205,6 +208,11 @@ function prefillCredentials() {
   if (s.bitget) {
     set('bgApiKey', s.bitget.apiKey); set('bgSecretKey', s.bitget.secretKey); set('bgPassphrase', s.bitget.passphrase);
   }
+
+  if (s.bybit) {
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    set('byApiKey', s.bybit.apiKey); set('byApiSecret', s.bybit.apiSecret);
+  }
 }
 
 async function saveMexcCreds() {
@@ -229,6 +237,16 @@ async function saveBitgetCreds() {
   };
   const r = await api.post('/api/settings/bitget', data);
   if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu thông tin đăng nhập Bitget', 'success'); }
+  else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+}
+
+async function saveBybitCreds() {
+  const data = {
+    apiKey: document.getElementById('byApiKey').value.trim(),
+    apiSecret: document.getElementById('byApiSecret').value.trim(),
+  };
+  const r = await api.post('/api/settings/bybit', data);
+  if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu đăng nhập Bybit', 'success'); }
   else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
 }
 
@@ -982,6 +1000,195 @@ function startPriceBoardPolling() {
     document.getElementById('bgStartBtn').style.display = 'inline-flex';
     document.getElementById('bgStopBtn').style.display = 'none';
     bgLog('Bitget auto-pricer đã dừng', 'warn');
+  }
+
+  async function connectBybit() {
+  const apiKey = document.getElementById('byApiKey').value.trim();
+  const apiSecret = document.getElementById('byApiSecret').value.trim();
+  if (!apiKey || !apiSecret) { showToast('Nhập API Key và Secret', 'error'); return; }
+
+  setLoading(true, 'byConnectBtn');
+  try {
+    const r = await api.post('/api/bybit/connect', { apiKey, apiSecret });
+    if (r.code === 0) {
+      state.byConnected = true;
+      updateBybitUI(true);
+      showToast('Đã kết nối Bybit', 'success');
+      await loadBybitAds();
+    } else {
+      showToast('Lỗi: ' + (r.msg || 'Kết nối thất bại'), 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'error');
+  } finally {
+    setLoading(false, 'byConnectBtn');
+  }
+}
+
+async function disconnectBybit() {
+  await api.post('/api/bybit/disconnect');
+  state.byConnected = false;
+  state.byAds = [];
+  updateBybitUI(false);
+  showToast('Đã ngắt Bybit', 'info');
+}
+
+function updateBybitUI(connected) {
+  document.getElementById('byConnStatus').textContent = connected ? 'Đã kết nối' : 'Chưa kết nối';
+  document.getElementById('byConnectBtn').style.display = connected ? 'none' : 'inline-flex';
+  document.getElementById('byDisconnectBtn').style.display = connected ? 'inline-flex' : 'none';
+  document.getElementById('byAdsSection').style.display = connected ? 'block' : 'none';
+}
+
+async function loadBybitAds() {
+  if (!state.byConnected) return;
+  try {
+    const r = await api.get('/api/bybit/my-ads');
+    console.log('[Bybit my-ads]', r);
+    if (r.ret_code === 0) {
+      state.byAds = extractBybitAds(r);
+      renderBybitAds();
+    } else {
+      showToast('Lỗi tải ads: ' + (r.ret_msg || ''), 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'error');
+  }
+}
+
+// Bóc mảng ad từ result — chịu nhiều dạng bọc
+function extractBybitAds(r) {
+  const res = r.result || {};
+  if (Array.isArray(res.items)) return res.items;
+  if (Array.isArray(res.list)) return res.list;
+  if (Array.isArray(res)) return res;
+  return [];
+}
+
+function renderBybitAds() {
+  const tbody = document.getElementById('byAdsBody');
+  if (!state.byAds.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Không có quảng cáo</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.byAds.map(ad => {
+    // side: 0 = MUA, 1 = BÁN
+    const isBuy = Number(ad.side) === 0;
+    const sideLabel = isBuy ? 'MUA' : 'BÁN';
+    const sideBadge = `<span class="by-side-badge ${isBuy ? 'by-buy' : 'by-sell'}">${sideLabel}</span>`;
+
+    // status ad: 10 = đang đăng (active). Các giá trị khác coi là ẩn/ngừng.
+    const isActive = Number(ad.status) === 10;
+    const adStatusBadge = `<span class="by-status-badge ${isActive ? 'by-active' : 'by-inactive'}">${isActive ? 'Đang đăng' : `Ẩn (${ad.status})`}</span>`;
+
+    // isOnline: cờ online/offline của thương nhân (boolean riêng, độc lập với status)
+    const online = ad.isOnline === true;
+    const onlineBadge = `<span class="by-status-badge ${online ? 'by-online' : 'by-offline'}">
+      <span class="by-dot"></span>${online ? 'Online' : 'Offline'}</span>`;
+
+    return `<tr>
+      <td class="mono-cell">${escapeHtml(String(ad.id ?? '—'))}</td>
+      <td>${sideBadge}</td>
+      <td>${escapeHtml(ad.tokenId ?? '—')}</td>
+      <td>${escapeHtml(ad.currencyId ?? '—')}</td>
+      <td class="mono-cell">${escapeHtml(String(ad.price ?? '—'))}</td>
+      <td class="mono-cell">${escapeHtml(String(ad.minAmount ?? '—'))}</td>
+      <td class="mono-cell">${escapeHtml(String(ad.maxAmount ?? '—'))}</td>
+      <td class="mono-cell">${escapeHtml(String(ad.lastQuantity ?? ad.quantity ?? '—'))}</td>
+      <td>${adStatusBadge}</td>
+      <td>${onlineBadge}</td>
+    </tr>`;
+  }).join('');
+  }
+
+  async function testBybitMarket() {
+    const body = {
+      tokenId: document.getElementById('byMktToken').value.trim(),
+      currencyId: document.getElementById('byMktCurrency').value.trim(),
+      side: document.getElementById('byMktSide').value,
+      size: document.getElementById('byMktSize').value || '10',
+    };
+    setLoading(true, 'byMktBtn');
+    const box = document.getElementById('byMktResponse');
+    const txt = document.getElementById('byMktResponseText');
+    try {
+      const r = await api.post('/api/bybit/online-ads', body);
+      box.style.display = 'block';
+      txt.textContent = JSON.stringify(r, null, 2);
+      if (r.ret_code !== 0) showToast('Lỗi: ' + (r.ret_msg || ''), 'error');
+    } catch (err) {
+      box.style.display = 'block'; txt.textContent = err.message;
+      showToast('Lỗi: ' + err.message, 'error');
+    } finally { setLoading(false, 'byMktBtn'); }
+  }
+
+  // Nạp ad hiện tại từ danh sách my-ads vào form update (điền đủ field bắt buộc)
+  function loadBybitAdIntoForm() {
+    const id = document.getElementById('byUpId').value.trim();
+    if (!id) { showToast('Nhập Ad ID trước', 'error'); return; }
+    const ad = (state.byAds || []).find(a => String(a.id) === id);
+    if (!ad) { showToast('Không thấy ad trong danh sách. Bấm "Tải lại" ở mục Quảng cáo của tôi trước.', 'error'); return; }
+    document.getElementById('byUpPriceType').value = String(ad.priceType ?? '0');
+    document.getElementById('byUpPrice').value = ad.price ?? '';
+    document.getElementById('byUpPremium').value = ad.premium ?? '';
+    document.getElementById('byUpQuantity').value = ad.quantity ?? ad.lastQuantity ?? '';
+    document.getElementById('byUpPayPeriod').value = ad.paymentPeriod ?? 15;
+    document.getElementById('byUpMin').value = ad.minAmount ?? '';
+    document.getElementById('byUpMax').value = ad.maxAmount ?? '';
+    document.getElementById('byUpPaymentIds').value = (ad.payments || []).join(',');
+    document.getElementById('byUpRemark').value = ad.remark ?? '';
+    showToast('Đã nạp ad vào form', 'success');
+  }
+
+  async function loadBybitPayments() {
+    const box = document.getElementById('byUpResponse');
+    const txt = document.getElementById('byUpResponseText');
+    try {
+      const r = await api.get('/api/bybit/payments');
+      box.style.display = 'block';
+      txt.textContent = JSON.stringify(r, null, 2);
+      showToast('Xem danh sách payment phía dưới — dùng field "id" làm Payment ID', 'info');
+    } catch (err) {
+      box.style.display = 'block'; txt.textContent = err.message;
+    }
+  }
+
+  async function submitBybitUpdate() {
+    const id = document.getElementById('byUpId').value.trim();
+    if (!id) { showToast('Ad ID là bắt buộc', 'error'); return; }
+
+    const paymentIds = document.getElementById('byUpPaymentIds').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+
+    // Mọi field đều bắt buộc theo tài liệu Bybit — gửi đủ bộ
+    const payload = {
+      id,
+      priceType: document.getElementById('byUpPriceType').value,
+      premium: document.getElementById('byUpPremium').value.trim(),
+      price: document.getElementById('byUpPrice').value.trim(),
+      minAmount: document.getElementById('byUpMin').value.trim(),
+      maxAmount: document.getElementById('byUpMax').value.trim(),
+      remark: document.getElementById('byUpRemark').value,
+      tradingPreferenceSet: {},
+      paymentIds,
+      actionType: document.getElementById('byUpActionType').value,
+      quantity: document.getElementById('byUpQuantity').value.trim(),
+      paymentPeriod: document.getElementById('byUpPayPeriod').value.trim(),
+    };
+
+    setLoading(true, 'byUpBtn');
+    const box = document.getElementById('byUpResponse');
+    const txt = document.getElementById('byUpResponseText');
+    try {
+      const r = await api.post('/api/bybit/ads/update', payload);
+      box.style.display = 'block';
+      txt.textContent = JSON.stringify(r, null, 2);
+      if (r.ret_code === 0) { showToast('Cập nhật thành công!', 'success'); await loadBybitAds(); }
+      else showToast('Lỗi: ' + (r.ret_msg || ''), 'error');
+    } catch (err) {
+      box.style.display = 'block'; txt.textContent = err.message;
+      showToast('Lỗi: ' + err.message, 'error');
+    } finally { setLoading(false, 'byUpBtn'); }
   }
 
   // ─── Kết nối / Ngắt kết nối ──────────────────────────
@@ -2124,7 +2331,15 @@ function startPriceBoardPolling() {
     saveBitgetCreds,
     saveMexcPricer,
     saveBitgetPricer,
-    refreshPriceBoard
+    refreshPriceBoard,
+    connectBybit,
+    disconnectBybit,
+    loadBybitAds,
+    saveBybitCreds,
+    testBybitMarket,
+    loadBybitAdIntoForm,
+    loadBybitPayments,
+    submitBybitUpdate,
   };
 })();
 

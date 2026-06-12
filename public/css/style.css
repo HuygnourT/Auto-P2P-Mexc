@@ -1085,3 +1085,7 @@ tbody td {
 .ap-log-msg.error   { color: var(--red); }
 .ap-log-msg.warn    { color: var(--amber); }
 .ap-log-empty { color: var(--text-muted); font-size: 12px; font-family: var(--font-mono); text-align: center; padding: 14px; }
+
+/* Color active and inactive ads bybit*/
+.by-status-badge.by-active   { background: rgba(34,197,94,0.12);  color: #22c55e; }
+.by-status-badge.by-inactive { background: rgba(234,179,8,0.15);  color: #eab308; }

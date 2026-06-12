@@ -405,6 +405,93 @@
     </div>
   </div> -->
 
+    <div class="card" id="bybitCard">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        Bybit P2P
+        <span class="card-subtitle" id="byConnStatus">Chưa kết nối</span>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>API Key</label><input type="text" id="byApiKey" spellcheck="false"></div>
+        <div class="form-group"><label>API Secret</label><input type="password" id="byApiSecret" spellcheck="false"></div>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-primary" id="byConnectBtn" onclick="App.connectBybit()">Kết nối</button>
+        <button class="btn btn-danger" id="byDisconnectBtn" style="display:none" onclick="App.disconnectBybit()">Ngắt</button>
+        <button class="btn btn-ghost" onclick="App.saveBybitCreds()">💾 Lưu đăng nhập</button>
+      </div>
+      <div id="byAdsSection" style="display:none;margin-top:16px">
+        <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo của tôi
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
+            <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="card-title" style="font-size:12px;margin-bottom:12px">Test lấy Ads thị trường
+        <span class="card-subtitle">POST /v5/p2p/item/online</span>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Token</label><input type="text" id="byMktToken" value="USDT" spellcheck="false"></div>
+        <div class="form-group"><label>Fiat</label><input type="text" id="byMktCurrency" value="EUR" spellcheck="false"></div>
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-group"><label>Side</label><select id="byMktSide"><option value="0">0 — Buy</option><option value="1">1 — Sell</option></select></div>
+        <div class="form-group"><label>Số dòng (size)</label><input type="number" id="byMktSize" value="10" min="1" max="300"></div>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-primary" id="byMktBtn" onclick="App.testBybitMarket()">Lấy ads</button>
+      </div>
+      <div id="byMktResponse" style="display:none;margin-top:14px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Response</label>
+        <pre id="byMktResponseText" style="margin-top:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto"></pre>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="card-title" style="font-size:12px;margin-bottom:12px">Test cập nhật Ad
+        <span class="card-subtitle">POST /v5/p2p/item/update</span>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Ad ID (id) <span style="color:var(--red)">*</span></label><input type="text" id="byUpId" placeholder="VD: 1898988222063644672" spellcheck="false"></div>
+        <div class="form-group"><label style="opacity:0">.</label><button class="btn btn-ghost" style="width:100%" onclick="App.loadBybitAdIntoForm()">⬇ Nạp ad hiện tại</button></div>
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-group"><label>priceType</label><select id="byUpPriceType"><option value="0">0 — Cố định</option><option value="1">1 — Thả nổi</option></select></div>
+        <div class="form-group"><label>actionType <span style="color:var(--red)">*</span></label><select id="byUpActionType"><option value="MODIFY">MODIFY — Sửa</option><option value="ACTIVE">ACTIVE — Đăng lại</option></select></div>
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-group"><label>Giá (price)</label><input type="number" id="byUpPrice" step="0.0001"></div>
+        <div class="form-group"><label>Premium (khi priceType=1)</label><input type="text" id="byUpPremium" placeholder="VD: 130"></div>
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-group"><label>Số lượng (quantity)</label><input type="number" id="byUpQuantity"></div>
+        <div class="form-group"><label>Payment Period (phút)</label><input type="number" id="byUpPayPeriod" value="15"></div>
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-group"><label>Min Amount</label><input type="number" id="byUpMin"></div>
+        <div class="form-group"><label>Max Amount</label><input type="number" id="byUpMax"></div>
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-group"><label>Payment IDs (cách nhau dấu phẩy)</label><input type="text" id="byUpPaymentIds" placeholder="VD: 377  (lấy từ Get User Payment)"></div>
+        <div class="form-group"><label>Remark</label><input type="text" id="byUpRemark" placeholder="Mô tả ad"></div>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-ghost btn-sm" onclick="App.loadBybitPayments()">Xem Payment IDs của tôi</button>
+        <button class="btn btn-primary" id="byUpBtn" onclick="App.submitBybitUpdate()">Gửi cập nhật</button>
+      </div>
+      <div id="byUpResponse" style="display:none;margin-top:14px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Response</label>
+        <pre id="byUpResponseText" style="margin-top:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto"></pre>
+      </div>
+    </div>
+
   <div class="toast-container" id="toastContainer"></div>
   <script src="/js/app.js"></script>
 </body>

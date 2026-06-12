@@ -7,6 +7,7 @@ const BitgetP2PService = require('../services/bitgetP2P');       // ★ MỚI
 const logger = require('../utils/logger');
 const config = require('../config');
 const settings = require('../services/settings');   // ★ thêm cạnh các require khác
+const bybitService = require('../services/bybitP2P');
 
 
 /**
@@ -338,6 +339,71 @@ router.post('/my/ads/update', requireConnection, async (req, res) => {
   } catch (error) {
     logger.error('Update ad error:', error.message);
     res.status(500).json({ code: -1, msg: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// BYBIT P2P
+// ══════════════════════════════════════════════════════
+
+router.post('/bybit/connect', async (req, res) => {
+  try {
+    const { apiKey, apiSecret } = req.body || {};
+    if (!apiKey || !apiSecret) return res.status(400).json({ code: -1, msg: 'Thiếu apiKey/apiSecret' });
+    bybitService.connect({ apiKey, apiSecret });
+    const check = await bybitService.getAccountInfo();
+    if (check.ret_code !== 0) {
+      bybitService.disconnect();
+      return res.json({ code: -1, msg: check.ret_msg || 'Xác thực thất bại' });
+    }
+    res.json({ code: 0, msg: 'connected', data: check.result });
+  } catch (err) {
+    bybitService.disconnect();
+    res.json({ code: -1, msg: err.message });
+  }
+});
+
+router.post('/bybit/disconnect', (_req, res) => {
+  bybitService.disconnect();
+  res.json({ code: 0, msg: 'disconnected' });
+});
+
+router.get('/bybit/my-ads', async (_req, res) => {
+  try {
+    const r = await bybitService.getMyAds({});
+    res.json(r);
+  } catch (err) {
+    res.json({ retCode: -1, retMsg: err.message });
+  }
+});
+
+router.post('/bybit/online-ads', async (req, res) => {
+  try {
+    const { tokenId, currencyId, side, page, size } = req.body || {};
+    if (!tokenId || !currencyId || side == null)
+      return res.status(400).json({ ret_code: -1, ret_msg: 'Thiếu tokenId/currencyId/side' });
+    const r = await bybitService.getOnlineAds({ tokenId, currencyId, side: String(side), page, size });
+    res.json(r);
+  } catch (err) {
+    res.json({ ret_code: -1, ret_msg: err.message });
+  }
+});
+
+router.post('/bybit/ads/update', async (req, res) => {
+  try {
+    const r = await bybitService.updateAd(req.body || {});
+    res.json(r);
+  } catch (err) {
+    res.json({ ret_code: -1, ret_msg: err.message });
+  }
+});
+
+router.get('/bybit/payments', async (_req, res) => {
+  try {
+    const r = await bybitService.getUserPayments();
+    res.json(r);
+  } catch (err) {
+    res.json({ ret_code: -1, ret_msg: err.message });
   }
 });
 
