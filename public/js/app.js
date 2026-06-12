@@ -77,6 +77,8 @@ const App = (() => {
 
   let byApTimer = null;
   let byApRowSeq = 1;
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
 
   // ─── API Client: Gửi request đến backend ─────────────
   const api = {
@@ -1333,8 +1335,6 @@ function renderBybitAds() {
         if (statusEl) { statusEl.textContent = msg; statusEl.className = `ap-row-status${type ? ' ' + type : ''}`; }
       };
 
-      console.log("Đang quét ads : " + row.id + " " + row.side);
-
       try {
         setStatus('Đang quét...', '');
 
@@ -2242,69 +2242,78 @@ function renderBybitAds() {
    * Bỏ qua ads của chính mình (state.myAdvNos).
    * BUY → giá cao nhất; SELL → giá thấp nhất.
    */
-  async function apFindBestPrice(side, amount, fiatUnit = 'VND', limit, extraFilters = {}) {
+  // Trước: async function apFindBestPrice(side, ...) { gọi api ... }
+  // Sau: nhận items có sẵn, chỉ lọc & chọn giá
+  function apFindBestPrice(items, { reqAmount, priceLimit, isBuyAd, selfAdvNo, extraFilters = {} }) {
     const now = Date.now();
-    let page = 1;
-    let bestPrice = null;
+    const hasLimit = priceLimit !== '' && priceLimit != null && !isNaN(parseFloat(priceLimit));
+    const lim = hasLimit ? parseFloat(priceLimit) : null;
 
-    // ★ MỚI: Chuẩn bị whitelist set để tra cứu nhanh (lowercase)
-    const whitelistSet = new Set(state.whitelist.map(n => n.toLowerCase()));
+    // Whitelist set để tra cứu nhanh (lowercase)
+    const whitelistSet = new Set((state.whitelist || []).map(n => n.toLowerCase()));
 
-    while (page <= 5) {
-      const amountParam = amount > 0 ? `&amount=${amount}` : '';
-      const result = await api.get(
-        `/api/market/ads?side=${side}&fiatUnit=${fiatUnit}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN${amountParam}`
-      );
-      if (result.code !== 0) break;
-
-      const ads = result.data || [];
-      if (ads.length === 0) break;
-
-      for (const ad of ads) {
-        // Bỏ qua ads của mình
-        if (state.myAdvNos.has(ad.advNo)) continue;
-
-        const price = parseFloat(ad.price);
-        if (isNaN(price)) continue;
-
-        // ★ MỚI: Bỏ qua thương nhân trong whitelist
-        const merchantName = (ad.merchant?.nickName || '').toLowerCase();
-        if (merchantName && whitelistSet.has(merchantName)) {
-          continue;
-        }
-
-        // Lọc online
-        if (extraFilters.onlineMinutes > 0) {
-          const lastOnline = ad.merchant?.lastOnlineTime;
-          if (!lastOnline || (now - lastOnline) / 60000 > extraFilters.onlineMinutes) continue;
-        }
-
-        if (extraFilters.userAllTradeCountMin > 0 && ad.userAllTradeCountMin < extraFilters.userAllTradeCountMin) {
-          continue;
-        }
-
-        if (extraFilters.userAllTradeCountMax > 0 && ad.userAllTradeCountMax < extraFilters.userAllTradeCountMax) {
-          continue;
-        }
-
-        if (extraFilters.maxSingleTransAmount > 0 && ad.maxSingleTransAmount < extraFilters.maxSingleTransAmount) {
-          continue;
-        }
-
-        // Lọc theo trần/sàn giá rồi cập nhật bestPrice
-        if (side === 'BUY') {
-          if (limit && price > parseFloat(limit)) continue;
-          if (bestPrice === null || price > bestPrice) bestPrice = price;
-        } else {
-          if (limit && price < parseFloat(limit)) continue;
-          if (bestPrice === null || price < bestPrice) bestPrice = price;
-        }
-      }
+    const prices = [];
+    for (const ad of items) {
       
-      page++;
-    }
+      // Bỏ qua ads của mình (theo set + theo advNo dòng đang xét)
+      if (state.myAdvNos && state.myAdvNos.has(ad.advNo)) continue;
+      if (selfAdvNo && String(ad.advNo) === String(selfAdvNo)) continue;
 
-    return bestPrice;
+      const p = parseFloat(ad.price);
+      if (isNaN(p)) continue;
+
+      // Bỏ qua thương nhân trong whitelist
+      const merchantName = (ad.merchant?.nickName || '').toLowerCase();
+      if (merchantName && whitelistSet.has(merchantName)) continue;
+
+      // Lọc online
+      if (extraFilters.onlineMinutes > 0) {
+        const lastOnline = ad.merchant?.lastOnlineTime;
+        if (!lastOnline || (now - lastOnline) / 60000 > extraFilters.onlineMinutes) continue;
+      }
+
+      // Lọc số giao dịch (giữ nguyên logic cũ)
+      if (extraFilters.userAllTradeCountMin > 0 && ad.userAllTradeCountMin < extraFilters.userAllTradeCountMin) continue;
+      if (extraFilters.userAllTradeCountMax > 0 && ad.userAllTradeCountMax < extraFilters.userAllTradeCountMax) continue;
+
+      // Lọc maxSingleTransAmount
+      if (extraFilters.maxSingleTransAmount > 0 && ad.maxSingleTransAmount < extraFilters.maxSingleTransAmount) continue;
+
+      // Lọc trần/sàn: BUY bỏ giá > trần; SELL bỏ giá < sàn
+      if (hasLimit) {
+        if (isBuyAd && p > lim) continue;
+        if (!isBuyAd && p < lim) continue;
+      }
+
+      if (reqAmount > 0) {
+        const mn = parseFloat(ad.minSingleTransAmount);
+        const mx = parseFloat(ad.maxSingleTransAmount);
+        if (!isNaN(mn) && reqAmount < mn) continue;
+        if (!isNaN(mx) && reqAmount > mx) continue;
+      }
+
+      prices.push(p);
+    }
+    if (!prices.length) return null;
+    return isBuyAd ? Math.max(...prices) : Math.min(...prices);
+  }
+
+  // Lấy toàn bộ ads thị trường MEXC 1 side, trả về mảng (rỗng nếu lỗi)
+  async function mexcFetchMarketSide(side, fiat = 'VND', pages = 10) {
+    const all = [];
+    for (let page = 1; page <= pages; page++) {
+      try {
+        const r = await api.get(`/api/market/ads?side=${side}&fiatUnit=${fiat}&page=${page}&coinId=128f589271cb4951b03e71e6323eb7be&blockTrade=true&allowTrade=true&countryCode=VN`);
+        const items = (r.code === 0 && Array.isArray(r.data)) ? r.data : [];
+        if (!items.length) break;
+        all.push(...items);
+        if (page < pages) await sleep(150);   // ~150ms/trang: an toàn dưới 10 req/s
+      } catch (err) {
+        apLog(`Lỗi lấy market MEXC ${side} trang ${page}: ${err.message}`, 'error');
+        break;
+      }
+    }
+    return all;
   }
 
   /**
@@ -2314,6 +2323,31 @@ function renderBybitAds() {
     const ads = state.myAds;
     if (!ads || ads.length === 0) return;
 
+    // Lọc các ad đang bật auto-pricing để biết cần lấy market side nào
+    const activeAds = ads.filter(ad => {
+      const advNo = ad.advNo || ad.davNo || '';
+      const cfg = state.apConfigs[advNo];
+      return cfg && cfg.enabled;
+    });
+    if (!activeAds.length) return;
+
+    // ── Lấy market 2 side TRƯỚC vòng lặp, nghỉ 1.2s giữa mỗi lần (rate limit 10 req/s) ──
+    // BUY ad ← BUY market ; SELL ad ← SELL market  (giữ đúng quy ước hiện tại của bạn)
+    const needBuy  = activeAds.some(ad => (ad.side || '').toUpperCase() === 'BUY');
+    const needSell = activeAds.some(ad => (ad.side || '').toUpperCase() !== 'BUY');
+
+    let buyMarket = [], sellMarket = [];
+    if (needBuy) {
+      buyMarket = await mexcFetchMarketSide('BUY');
+      apLog(`Market BUY: ${buyMarket.length} ads`, '');
+      await sleep(1200);
+    }
+    if (needSell) {
+      sellMarket = await mexcFetchMarketSide('SELL');
+      apLog(`Market SELL: ${sellMarket.length} ads`, '');
+      await sleep(1200);
+    }
+
     for (const ad of ads) {
       const advNo = ad.advNo || ad.davNo || '';
       const cfg = state.apConfigs[advNo];
@@ -2321,25 +2355,43 @@ function renderBybitAds() {
 
       const isBuy = (ad.side || '').toUpperCase() === 'BUY';
       const side  = isBuy ? 'BUY' : 'SELL';
+      //const side  = isBuy ? 'SELL' : 'BUY';
       const fiat  = ad.fiatUnit || 'VND';
 
       setApRowStatus(advNo, 'Đang quét...', '');
 
       try {
-        // 1. Tìm giá tốt nhất với đầy đủ điều kiện lọc
-        const bestPrice = await apFindBestPrice(
-          side,
-          parseFloat(cfg.amount) || 0,
-          fiat,
-          cfg.priceLimit,
-          {
+        // 1. Tìm giá tốt nhất từ market đã lưu trong bộ nhớ (không gọi API nữa)
+        // const items = isBuy ? buyMarket : sellMarket;
+        // const bestPrice = apFindBestPrice(
+        //   items,
+        //   side,
+        //   parseFloat(cfg.amount) || 0,
+        //   fiat,
+        //   cfg.priceLimit,
+        //   {
+        //     onlineMinutes: cfg.onlineMinutes || 0,
+        //     userAllTradeCountMin: cfg.userAllTradeCountMin || 0,
+        //     userAllTradeCountMax: cfg.userAllTradeCountMax || 0,
+        //     maxSingleTransAmount: cfg.filterMaxSingleTransAmount || 0,
+        //   },
+        //   advNo   // để bỏ qua ad của chính mình
+        // );
+
+        // 1. Tìm giá tốt nhất từ market đã lưu trong bộ nhớ (không gọi API nữa)
+        const items = isBuy ? buyMarket : sellMarket;
+        const bestPrice = apFindBestPrice(items, {
+          reqAmount: parseFloat(cfg.amount) || 0,
+          priceLimit: cfg.priceLimit,
+          isBuyAd: isBuy,
+          selfAdvNo: advNo,
+          extraFilters: {
             onlineMinutes: cfg.onlineMinutes || 0,
             userAllTradeCountMin: cfg.userAllTradeCountMin || 0,
             userAllTradeCountMax: cfg.userAllTradeCountMax || 0,
             maxSingleTransAmount: cfg.filterMaxSingleTransAmount || 0,
-          }
-        );
-        console.log("apRunCycle best price " + bestPrice);
+          },
+        });
 
         if (bestPrice === null) {
           setApRowStatus(advNo, 'Không tìm được giá', 'warn');
