@@ -2152,7 +2152,7 @@ function renderBybitAds() {
 
     const ads = state.myAds;
     if (!ads || ads.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="14" class="ap-empty">Kết nối API chính và tải quảng cáo để cấu hình</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="15" class="ap-empty">Kết nối API chính và tải quảng cáo để cấu hình</td></tr>';
       return;
     }
 
@@ -2174,10 +2174,12 @@ function renderBybitAds() {
           userAllTradeCountMin: 0,
           userAllTradeCountMax: 0,
           filterMaxSingleTransAmount: 0,
+          payMethod: 1799581,
           lastStatus: '',
         };
       }
       const c = state.apConfigs[advNo];
+      if (c.payMethod == null) c.payMethod = 1799581;   // backfill cho cấu hình cũ đã lưu
 
       return `
         <tr id="ap-row-${advNo}">
@@ -2209,6 +2211,7 @@ function renderBybitAds() {
           <td><input type="number" class="ap-num-input" value="${c.userAllTradeCountMin}" placeholder="—" onchange="App.apSetCfg('${advNo}','userAllTradeCountMin',this.value)"></td>
           <td><input type="number" class="ap-num-input" value="${c.userAllTradeCountMax}" placeholder="—" onchange="App.apSetCfg('${advNo}','userAllTradeCountMax',this.value)"></td>
           <td><input type="number" class="ap-num-input" value="${c.filterMaxSingleTransAmount}" placeholder="—" onchange="App.apSetCfg('${advNo}','filterMaxSingleTransAmount',this.value)"></td>
+          <td><input type="number" class="ap-num-input" value="${c.payMethod}" placeholder="1799581" ${isBuy ? 'disabled title="Chỉ áp dụng cho ads SELL"' : ''} onchange="App.apSetCfg('${advNo}','payMethod',this.value)"></td>
           <td><span class="ap-row-status" id="ap-status-${advNo}">${c.lastStatus || '—'}</span></td>
         </tr>`;
     }).join('');
@@ -2470,7 +2473,7 @@ function renderBybitAds() {
           minSingleTransAmount: cfg.minTrans,
           maxSingleTransAmount: cfg.maxTrans,
           frozenQuantity: ad.frozenQuantity,
-          payMethod: 1799581,
+          payMethod: isBuy ? 1799581 : (parseFloat(cfg.payMethod) || 1799581),
           countryCode: 'VN',
           kycLevel: 'PRIMARY',
         };
