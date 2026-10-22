@@ -1253,11 +1253,14 @@ function renderBybitAds() {
     state.byApRows.push({
       id: byApRowSeq++, side: 'buy', advId: '', tokenId: 'USDT', currencyId: 'VND',
       searchAmount: '', offset: '', priceLimit: '', refill: '',
+      qtyMode: 'refill',   // BUY: 'refill' = tự refill 20000 | 'keep' = giữ SL hiện tại của ad
       minAmount: '', maxAmount: '',
       enabled: false, lastStatus: ''
     });
     renderByApRows();
   }
+
+  const BY_BUY_REFILL_QTY = 20000;   // SL tự refill cho ad BUY (chế độ 'refill')
 
   function byApRemoveRow(id) { state.byApRows = state.byApRows.filter(r => r.id !== id); renderByApRows(); }
 
@@ -1265,18 +1268,24 @@ function renderBybitAds() {
     const row = state.byApRows.find(r => r.id === id);
     if (!row) return;
     row[field] = value;
-    if (field === 'side') renderByApRows();
+    if (field === 'side' || field === 'qtyMode') renderByApRows();
   }
 
   function renderByApRows() {
     const tbody = document.getElementById('byApTableBody');
     if (!tbody) return;
     if (!state.byApRows.length) {
-      tbody.innerHTML = '<tr><td colspan="13" class="ap-empty">Chưa có dòng nào.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="14" class="ap-empty">Chưa có dòng nào.</td></tr>';
       return;
     }
     tbody.innerHTML = state.byApRows.map(r => {
       const isSell = r.side === 'sell';
+      const keepQty = isSell || r.qtyMode === 'keep';   // SELL luôn giữ SL hiện tại
+      const qtyCell = isSell
+        ? `<select class="ap-num-input" style="width:150px" disabled title="SELL luôn giữ số lượng hiện tại (+ refill tay)"><option>Giữ SL hiện tại</option></select>`
+        : `<select class="ap-num-input" style="width:150px" onchange="App.byApSetRow(${r.id},'qtyMode',this.value)">
+            <option value="refill" ${r.qtyMode !== 'keep' ? 'selected' : ''}>Refill ${formatNumber(BY_BUY_REFILL_QTY)}</option>
+            <option value="keep" ${r.qtyMode === 'keep' ? 'selected' : ''}>Giữ SL hiện tại</option></select>`;
       return `<tr id="by-ap-row-${r.id}">
         <td><select class="ap-num-input" style="width:80px" onchange="App.byApSetRow(${r.id},'side',this.value)">
           <option value="buy" ${!isSell ? 'selected' : ''}>MUA</option>
@@ -1290,7 +1299,8 @@ function renderBybitAds() {
         <td><input type="number" class="ap-num-input" style="width:100px" value="${r.priceLimit}" placeholder="${isSell ? 'Sàn' : 'Trần'}" onchange="App.byApSetRow(${r.id},'priceLimit',this.value)"></td>
         <td><input type="number" class="ap-num-input" style="width:100px" value="${r.minAmount}" placeholder="—" onchange="App.byApSetRow(${r.id},'minAmount',this.value)"></td>
         <td><input type="number" class="ap-num-input" style="width:100px" value="${r.maxAmount}" placeholder="—" onchange="App.byApSetRow(${r.id},'maxAmount',this.value)"></td>
-        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.refill}" placeholder="${isSell ? '0' : 'N/A'}" ${isSell ? '' : 'disabled'} onchange="App.byApSetRow(${r.id},'refill',this.value)"></td>
+        <td>${qtyCell}</td>
+        <td><input type="number" class="ap-num-input" style="width:100px" value="${r.refill}" placeholder="${keepQty ? '0' : 'N/A'}" ${keepQty ? '' : 'disabled'} onchange="App.byApSetRow(${r.id},'refill',this.value)"></td>
         <td><span class="ap-row-status" id="by-ap-status-${r.id}">${escapeHtml(r.lastStatus) || '—'}</span></td>
         <td><button class="btn-remove" style="padding:4px 10px;font-size:11px;border-radius:4px;border:1px solid rgba(239,68,68,0.3);background:rgba(255,255,255,0.04);color:var(--red);cursor:pointer" onclick="App.byApRemoveRow(${r.id})">Xóa</button></td>
       </tr>`;
@@ -1350,6 +1360,7 @@ function renderBybitAds() {
     const onlineOnly = document.getElementById('byOnlineOnly')?.checked ?? true;   // ★ đặt ở đây
 
     let sellMarket = [], buyMarket = [];
+    let freshMyAds = null;   // cache Get My Ads trong vòng này (cho dòng giữ SL hiện tại)
     try {
       if (needSell) {
         const r = await api.post('/api/bybit/online-ads', { tokenId: TOKEN, currencyId: FIAT, side: '1', size: '50' });
@@ -1403,21 +1414,34 @@ function renderBybitAds() {
         const scale = myAd.symbolInfo?.currency?.scale ?? 2;
         newPrice = (+newPrice).toFixed(scale);
 
+        // ★ Chỉ cập nhật khi giá mới khác giá hiện tại của ad
+        const currentPrice = (+myAd.price).toFixed(scale);
+        const hasManualRefill = (parseFloat(row.refill) || 0) > 0;   // có nhập Refill tay thì vẫn cập nhật
+        if (newPrice === currentPrice && !hasManualRefill) {
+          setStatus(`Giá OK: ${currentPrice}`, 'ok');
+          continue;
+        }
+
         // Quantity + nguồn ad cho min/max/remark...
         let quantity;
         let srcAd = myAd;
-        if (isBuy) {
-          quantity = '20000';   // BUY luôn 20000
+        const keepQty = !isBuy || row.qtyMode === 'keep';
+        if (!keepQty) {
+          quantity = String(BY_BUY_REFILL_QTY);   // BUY chế độ refill: luôn 20000
         } else {
-          // SELL: gọi Get My Ads lấy số mới nhất → lastQuantity - frozenQuantity (+ refill)
-          const fresh = await api.get('/api/bybit/my-ads');
-          const freshAd = (fresh.ret_code === 0 ? (fresh.result?.items || []) : [])
-            .find(a => String(a.id) === String(row.advId));
-          if (!freshAd) { setStatus('SELL: không lấy được số lượng mới', 'err'); continue; }
-          srcAd = freshAd;   // SELL dùng ad tươi cho cả min/max
+          // SELL hoặc BUY "Giữ SL hiện tại": gọi Get My Ads lấy số mới nhất → lastQuantity - frozenQuantity (+ refill tay)
+          // Cache 1 lần/vòng để không gọi lại cho mỗi dòng
+          if (!freshMyAds) {
+            const fresh = await api.get('/api/bybit/my-ads');
+            freshMyAds = fresh.ret_code === 0 ? (fresh.result?.items || []) : [];
+          }
+          const freshAd = freshMyAds.find(a => String(a.id) === String(row.advId));
+          if (!freshAd) { setStatus(`${isBuy ? 'BUY' : 'SELL'}: không lấy được số lượng mới`, 'err'); continue; }
+          srcAd = freshAd;   // dùng ad tươi cho cả min/max
           const avail = (parseFloat(freshAd.lastQuantity) || 0) - (parseFloat(freshAd.frozenQuantity) || 0);
           const refillAmt = parseFloat(row.refill) || 0;
           quantity = String(Math.max(0, avail + refillAmt));
+          if (parseFloat(quantity) <= 0) byLog(`[${truncateId(row.advId)}] Số lượng hiện tại = 0 — cân nhắc nhập Refill tay`, 'warn');
         }
 
         // Min/Max: ưu tiên giá trị nhập trên dòng, fallback về ad
@@ -1449,10 +1473,11 @@ function renderBybitAds() {
 
         const result = await api.post('/api/bybit/ads/update', payload);
         if (result.ret_code === 0) {
+          myAd.price = newPrice;   // ★ cập nhật giá trong cache để vòng sau so sánh đúng
           setStatus(`→ ${newPrice} | SL ${formatNumber(parseFloat(quantity))}`, 'ok');
           byLog(`[${truncateId(row.advId)}] ${row.side.toUpperCase()} ref ${isBuy ? 'SELL' : 'BUY'}: ${refPrice} +${offset} → ${newPrice} | SL=${quantity}`, 'success');
-          // Reset refill về 0 sau khi SELL thành công
-          if (!isBuy && (parseFloat(row.refill) || 0) > 0) {
+          // Reset refill tay về 0 sau khi cập nhật thành công (SELL / BUY giữ SL)
+          if (keepQty && (parseFloat(row.refill) || 0) > 0) {
             row.refill = '';
             renderByApRows();
           }
@@ -1534,6 +1559,7 @@ function renderBybitAds() {
         await loadMyAds();
         restoreMexcPricerConfig();   // ★ khôi phục cấu hình đã lưu
         renderAutoPricerTable();     // ★ render lại để áp cấu hình
+        await loadMexcAdText(false); // ★ hiện Automated Reply / Advertiser Terms (Tiếng Việt)
         await loadMarketAds('BUY');
         await loadMarketAds('SELL');
       } else {
@@ -2141,6 +2167,110 @@ function renderBybitAds() {
   }
 
   // ═══════════════════════════════════════════════════════
+  // MEXC — Automated Reply & Advertiser Terms
+  //   Nhập Tiếng Việt → server lưu → saveOrUpdateAd convert UTF-8 khi gửi
+  // ═══════════════════════════════════════════════════════
+
+  let mexcAdTextDirty = false;
+
+  // Giống server (utils/mexcText.js): encode UTF-8 chặt, encode cả ! ' ( ) *
+  function mexcLooksEncoded(str) {
+    return /^[A-Za-z0-9\-_.~%]*$/.test(str) && /%[0-9A-Fa-f]{2}/.test(str);
+  }
+  function mexcEncodeText(str) {
+    const s = String(str || '').replace(/\r\n/g, '\n');
+    if (!s || mexcLooksEncoded(s)) return s;
+    return encodeURIComponent(s).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+  }
+  function mexcDecodeText(str) {
+    const s = String(str || '');
+    if (!mexcLooksEncoded(s)) return s;
+    try { return decodeURIComponent(s); } catch { return s; }
+  }
+
+  function setMexcAdTextStatus(msg) {
+    const el = document.getElementById('mexcAdTextStatus');
+    if (el) el.textContent = msg;
+  }
+
+  // Cập nhật bản xem trước UTF-8 + đếm ký tự
+  function mexcAdTextPreview(fromInput = true) {
+    if (fromInput) mexcAdTextDirty = true;
+    [['mexcAutoReplyMsg'], ['mexcTradeTerms']].forEach(([id]) => {
+      const ta = document.getElementById(id);
+      if (!ta) return;
+      // Người dùng dán chuỗi đã encode → tự đổi về Tiếng Việt
+      if (mexcLooksEncoded(ta.value.trim())) ta.value = mexcDecodeText(ta.value.trim());
+      const enc = mexcEncodeText(ta.value);
+      const pre = document.getElementById(id + 'Encoded');
+      if (pre) pre.textContent = enc || '(trống — không gửi field này)';
+      const cnt = document.getElementById(id + 'Count');
+      if (cnt) cnt.textContent = `${ta.value.length} ký tự · ${enc.length} encoded`;
+    });
+    if (fromInput) setMexcAdTextStatus('Có thay đổi chưa lưu');
+  }
+
+  function fillMexcAdText(data) {
+    const ar = document.getElementById('mexcAutoReplyMsg');
+    const tt = document.getElementById('mexcTradeTerms');
+    if (!ar || !tt) return;
+    ar.value = mexcDecodeText(data.autoReplyMsg || '');
+    tt.value = mexcDecodeText(data.tradeTerms || '');
+    let note = data.isDefault ? 'Đang dùng nội dung mặc định' : 'Đã tải nội dung đã lưu';
+
+    // Chưa lưu Advertiser Terms → hiện terms hiện tại của ads MEXC (nếu có) để chỉnh
+    if (data.isDefault && !tt.value) {
+      const adWithTerms = (state.myAds || []).find(a => a.tradeTerms);
+      if (adWithTerms) {
+        tt.value = mexcDecodeText(adWithTerms.tradeTerms);
+        note += ' · Terms lấy từ ad hiện tại (bấm Lưu để áp dụng)';
+      }
+    }
+    mexcAdTextDirty = false;
+    mexcAdTextPreview(false);
+    setMexcAdTextStatus(note);
+  }
+
+  async function loadMexcAdText(force = true) {
+    if (!force && mexcAdTextDirty) return;   // không ghi đè nội dung đang soạn
+    try {
+      const r = await api.get('/api/mexc/ad-text');
+      if (r.code === 0 && r.data) fillMexcAdText(r.data);
+      else showToast('Lỗi tải nội dung quảng cáo: ' + (r.msg || ''), 'error');
+    } catch (err) {
+      showToast('Lỗi tải nội dung quảng cáo: ' + err.message, 'error');
+    }
+  }
+
+  async function saveMexcAdText() {
+    const autoReplyMsg = document.getElementById('mexcAutoReplyMsg').value;
+    const tradeTerms = document.getElementById('mexcTradeTerms').value;
+    try {
+      const r = await api.post('/api/mexc/ad-text', { autoReplyMsg, tradeTerms });
+      if (r.code === 0) {
+        fillMexcAdText(r.data);
+        setMexcAdTextStatus('Đã lưu · áp dụng từ lần cập nhật ad tiếp theo');
+        showToast('Đã lưu Automated Reply / Advertiser Terms', 'success');
+      } else {
+        showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+      }
+    } catch (err) {
+      showToast('Lỗi lưu: ' + err.message, 'error');
+    }
+  }
+
+  async function resetMexcAdText() {
+    if (!window.confirm('Khôi phục nội dung mặc định? Nội dung đã lưu sẽ bị xóa.')) return;
+    try {
+      const r = await api.post('/api/mexc/ad-text/reset', {});
+      if (r.code === 0) { fillMexcAdText(r.data); showToast('Đã khôi phục mặc định', 'info'); }
+      else showToast('Lỗi: ' + (r.msg || ''), 'error');
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'error');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
   // AUTO-PRICER — Tự động chỉnh giá
   // ═══════════════════════════════════════════════════════
 
@@ -2633,6 +2763,7 @@ function renderBybitAds() {
       restoreMexcPricerConfig();   // ★
       renderAutoPricerTable();     // ★
     }
+    await loadMexcAdText(false);   // ★ nội dung Automated Reply / Advertiser Terms
     if (status.data?.secondaryConnected) {
       state.secondaryConnected = true;
       updateSecondaryConnectionUI(true, '');
@@ -2728,6 +2859,10 @@ function renderBybitAds() {
     startBybitPricer,
     stopBybitPricer, 
     saveBybitPricer,
+    loadMexcAdText,
+    saveMexcAdText,
+    resetMexcAdText,
+    mexcAdTextPreview,
   };
 })();
 

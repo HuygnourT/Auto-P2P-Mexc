@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const settings = require('../services/settings');   // ★ thêm cạnh các require khác
 const bybitService = require('../services/bybitP2P');
+const { encodeMexcText, decodeMexcText, DEFAULT_AUTO_REPLY, DEFAULT_TRADE_TERMS } = require('../utils/mexcText');
 
 
 /**
@@ -124,6 +125,55 @@ router.post('/settings/:section', (req, res) => {
   try {
     const updated = settings.saveSection(req.params.section, req.body || {});
     res.json({ code: 0, data: updated });
+  } catch (err) {
+    res.status(400).json({ code: -1, msg: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// MEXC — Automated Reply & Advertiser Terms
+//   Lưu dạng Tiếng Việt (settings.mexcAdText), khi gửi lên MEXC sẽ convert UTF-8
+// ══════════════════════════════════════════════════════
+
+function buildAdTextResponse() {
+  const saved = settings.getSettings().mexcAdText || {};
+  const hasSaved = typeof saved.autoReplyMsg === 'string' || typeof saved.tradeTerms === 'string';
+  const autoReplyMsg = decodeMexcText(typeof saved.autoReplyMsg === 'string' ? saved.autoReplyMsg : DEFAULT_AUTO_REPLY);
+  const tradeTerms = decodeMexcText(typeof saved.tradeTerms === 'string' ? saved.tradeTerms : DEFAULT_TRADE_TERMS);
+  return {
+    autoReplyMsg,
+    tradeTerms,
+    autoReplyMsgEncoded: encodeMexcText(autoReplyMsg),
+    tradeTermsEncoded: encodeMexcText(tradeTerms),
+    isDefault: !hasSaved,
+    defaults: { autoReplyMsg: DEFAULT_AUTO_REPLY, tradeTerms: DEFAULT_TRADE_TERMS },
+  };
+}
+
+router.get('/mexc/ad-text', (_req, res) => {
+  res.json({ code: 0, data: buildAdTextResponse() });
+});
+
+router.post('/mexc/ad-text', (req, res) => {
+  try {
+    const { autoReplyMsg = '', tradeTerms = '' } = req.body || {};
+    // Lưu dạng Tiếng Việt (nếu người dùng dán chuỗi đã encode thì decode lại)
+    settings.saveSection('mexcAdText', {
+      autoReplyMsg: decodeMexcText(String(autoReplyMsg)).replace(/\r\n/g, '\n'),
+      tradeTerms: decodeMexcText(String(tradeTerms)).replace(/\r\n/g, '\n'),
+      updatedAt: Date.now(),
+    });
+    logger.info('[MEXC] Đã lưu Automated Reply / Advertiser Terms');
+    res.json({ code: 0, data: buildAdTextResponse() });
+  } catch (err) {
+    res.status(400).json({ code: -1, msg: err.message });
+  }
+});
+
+router.post('/mexc/ad-text/reset', (_req, res) => {
+  try {
+    settings.saveSection('mexcAdText', {});
+    res.json({ code: 0, data: buildAdTextResponse() });
   } catch (err) {
     res.status(400).json({ code: -1, msg: err.message });
   }

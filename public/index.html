@@ -354,6 +354,39 @@
       </div>
     </div> -->
 
+    <!-- CARD: NỘI DUNG QUẢNG CÁO MEXC (Automated Reply & Advertiser Terms) -->
+    <div class="card" id="mexcAdTextCard">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.84L3 20l1.4-3.72A7.4 7.4 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        Nội dung quảng cáo MEXC
+        <span class="card-subtitle" id="mexcAdTextStatus">Nhập Tiếng Việt · tự convert UTF-8 khi gửi lên MEXC</span>
+      </div>
+      <div class="adtext-grid">
+        <div class="form-group">
+          <label for="mexcAutoReplyMsg">Automated Reply <span class="adtext-count" id="mexcAutoReplyMsgCount"></span></label>
+          <textarea id="mexcAutoReplyMsg" class="adtext-input" rows="7" placeholder="Tin nhắn tự động gửi cho người mua/bán khi tạo lệnh" oninput="App.mexcAdTextPreview()"></textarea>
+          <details class="adtext-encoded">
+            <summary>Xem dạng UTF-8 (gửi lên API)</summary>
+            <pre id="mexcAutoReplyMsgEncoded"></pre>
+          </details>
+        </div>
+        <div class="form-group">
+          <label for="mexcTradeTerms">Advertiser Terms <span class="adtext-count" id="mexcTradeTermsCount"></span></label>
+          <textarea id="mexcTradeTerms" class="adtext-input" rows="7" placeholder="Điều khoản giao dịch của nhà quảng cáo (để trống = không gửi)" oninput="App.mexcAdTextPreview()"></textarea>
+          <details class="adtext-encoded">
+            <summary>Xem dạng UTF-8 (gửi lên API)</summary>
+            <pre id="mexcTradeTermsEncoded"></pre>
+          </details>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-primary btn-sm" onclick="App.saveMexcAdText()">💾 Lưu nội dung</button>
+        <button class="btn btn-ghost btn-sm" onclick="App.loadMexcAdText()">↺ Tải lại</button>
+        <button class="btn btn-ghost btn-sm" onclick="App.resetMexcAdText()">Khôi phục mặc định</button>
+      </div>
+      <p class="adtext-hint">Nội dung đã lưu sẽ được dùng mỗi lần auto-pricer cập nhật quảng cáo (save_or_update). Có thể dán cả chuỗi đã encode (%E1%BB%8B…) — hệ thống tự đổi về Tiếng Việt.</p>
+    </div>
+
     <!-- CARD: TỰ ĐỘNG CHỈNH GIÁ (MEXC) -->
     <div class="card" id="autoPricerCard">
       <div class="card-title">
@@ -455,8 +488,8 @@
         <span class="ap-status-badge stopped" id="byApBadge">⏹ Đã dừng</span>
       </div>
       <div class="ap-table-wrap">
-        <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần/Sàn</th><th>Min</th><th>Max</th><th>Refill (Sell)</th><th>Trạng thái</th><th></th></tr></thead>
-          <tbody id="byApTableBody"><tr><td colspan="13" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
+        <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần/Sàn</th><th>Min</th><th>Max</th><th title="BUY: tự refill 20000 mỗi lần cập nhật, hoặc giữ số lượng hiện tại của ad">Số lượng</th><th title="Cộng thêm vào số lượng hiện tại (SELL, hoặc BUY khi chọn Giữ SL)">Refill tay</th><th>Trạng thái</th><th></th></tr></thead>
+          <tbody id="byApTableBody"><tr><td colspan="14" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
         </table>
       </div>
       <div style="margin-top:10px">
