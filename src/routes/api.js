@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const settings = require('../services/settings');   // ★ thêm cạnh các require khác
 const bybitService = require('../services/bybitP2P');
+const bingxService = require('../services/bingxP2P');
 const { encodeMexcText, decodeMexcText, DEFAULT_AUTO_REPLY, DEFAULT_TRADE_TERMS } = require('../utils/mexcText');
 
 
@@ -59,6 +60,8 @@ router.get('/status', (_req, res) => {
       connected: !!activeService,
       secondaryConnected: !!secondaryService,
       bitgetConnected: !!bitgetService,                          // ★ MỚI
+      bybitConnected: bybitService.isConnected(),
+      bingxConnected: bingxService.isConnected(),
     },
   });
 });
@@ -454,6 +457,87 @@ router.get('/bybit/payments', async (_req, res) => {
     res.json(r);
   } catch (err) {
     res.json({ ret_code: -1, ret_msg: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// BINGX P2P
+// ══════════════════════════════════════════════════════
+
+function requireBingx(_req, res, next) {
+  if (!bingxService.isConnected()) return res.status(400).json({ code: -1, msg: 'BingX chưa kết nối' });
+  next();
+}
+
+router.post('/bingx/connect', async (req, res) => {
+  const { apiKey, secretKey, postMode } = req.body || {};
+  if (!apiKey || !secretKey) return res.status(400).json({ code: -1, msg: 'Thiếu API Key / Secret Key' });
+  try {
+    bingxService.connect({ apiKey: apiKey.trim(), secretKey: secretKey.trim(), postMode });
+    const check = await bingxService.getMyAdsAll();
+    if (check.code !== 0) {
+      bingxService.disconnect();
+      const hint = bingxService.explain(check);
+      return res.json({ code: check.code || -1, msg: `${check.msg || 'Kết nối BingX thất bại'}${hint ? ' — ' + hint : ''}` });
+    }
+    logger.info(`[BingX] Connected — ${check.data.total} ads`);
+    res.json({ code: 0, data: check.data });
+  } catch (err) {
+    bingxService.disconnect();
+    logger.error('[BingX] connect error:', err.message);
+    res.status(500).json({ code: -1, msg: err.message });
+  }
+});
+
+// Kiểm tra kết nối từng bước (dùng key trên form, không cần đang kết nối)
+router.post('/bingx/diagnose', async (req, res) => {
+  const { apiKey, secretKey } = req.body || {};
+  if (!apiKey || !secretKey) return res.status(400).json({ code: -1, msg: 'Thiếu API Key / Secret Key' });
+  try {
+    res.json({ code: 0, data: await bingxService.diagnose({ apiKey: apiKey.trim(), secretKey: secretKey.trim() }) });
+  } catch (err) {
+    res.status(500).json({ code: -1, msg: err.message });
+  }
+});
+
+router.post('/bingx/disconnect', (_req, res) => {
+  bingxService.disconnect();
+  res.json({ code: 0 });
+});
+
+// Ads của tôi: gồm cả Listed (online) và Delisted (offline)
+router.get('/bingx/my-ads', requireBingx, async (_req, res) => {
+  try {
+    res.json(await bingxService.getMyAdsAll());
+  } catch (err) {
+    res.status(500).json({ code: -1, msg: err.message });
+  }
+});
+
+// Market: tradeType 1 = người dùng mua (ads BÁN của merchant), 2 = người dùng bán (ads MUA)
+router.get('/bingx/market', async (req, res) => {
+  try {
+    const { asset = 'USDT', fiatUnit = 'VND', tradeType, pages = 3 } = req.query;
+    if (!['1', '2'].includes(String(tradeType))) return res.status(400).json({ code: -1, msg: 'tradeType phải là 1 hoặc 2' });
+    const r = await bingxService.getMarketAdsAll({
+      asset, fiatUnit, tradeType: Number(tradeType), pages: Math.min(10, Math.max(1, parseInt(pages) || 3)),
+    });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ code: -1, msg: err.message });
+  }
+});
+
+// Đổi giá ad (3.8 Edit P2P ads) — server tự ghép các field bắt buộc từ ad hiện tại
+router.post('/bingx/ads/update-price', requireBingx, async (req, res) => {
+  try {
+    const { advertNo, price, minAmount, maxAmount, totalNumber } = req.body || {};
+    if (!advertNo || price === undefined || price === '') return res.status(400).json({ code: -1, msg: 'Thiếu advertNo / price' });
+    logger.info(`[BingX] Update price advertNo=${advertNo} price=${price}`);
+    res.json(await bingxService.updateAdPrice({ advertNo, price, minAmount, maxAmount, totalNumber }));
+  } catch (err) {
+    logger.error('[BingX] update-price error:', err.message);
+    res.status(500).json({ code: -1, msg: err.message });
   }
 });
 

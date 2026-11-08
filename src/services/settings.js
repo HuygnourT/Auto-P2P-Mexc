@@ -3,7 +3,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 
 const SETTINGS_PATH = path.join(__dirname, '..', '..', 'data', 'settings.json');
-const DEFAULT = { mexc: {}, bitget: {}, bybit: {}, mexcPricer: {}, bitgetPricer: {}, bybitPricer: {}, mexcAdText: {} };
+const DEFAULT = { mexc: {}, bitget: {}, bybit: {}, mexcPricer: {}, bitgetPricer: {}, bybitPricer: {}, mexcAdText: {}, bingx: {}, bingxPricer: {} };
 const ALLOWED = Object.keys(DEFAULT);
 
 function getSettings() {

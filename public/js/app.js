@@ -61,6 +61,13 @@ const App = (() => {
     byConnected: false,
     byAds: [],
     byApRows: [],   // [{ id, side, advId, tokenId, currencyId, searchAmount, offset, priceLimit, refill, enabled, lastStatus }]
+
+    // ★ BingX P2P
+    bxConnected: false,
+    bxAds: [],            // ads của tôi (Listed + Delisted) từ 3.10 myAdvert
+    bxAdvNos: new Set(),
+    bxAdsFilter: 'ALL',
+    bxConfigs: {},        // cấu hình auto-pricer theo advertNo
   };
 
   // Timer auto-refresh (handle của setInterval)
@@ -213,6 +220,11 @@ function prefillCredentials() {
   }
   if (s.bitget) {
     set('bgApiKey', s.bitget.apiKey); set('bgSecretKey', s.bitget.secretKey); set('bgPassphrase', s.bitget.passphrase);
+  }
+
+  if (s.bingx) {
+    set('bxApiKey', s.bingx.apiKey); set('bxSecretKey', s.bingx.secretKey);
+    if (s.bingx.postMode) set('bxPostMode', s.bingx.postMode);
   }
 
   if (s.bybit) {
@@ -434,6 +446,9 @@ async function fetchMexcBest(side, amount) {
       fetchBybitBest('buy', amount),
       fetchBybitBest('sell', amount),
     ]);
+    const [xb, xs] = [await fetchBingxBest('buy', amount), await fetchBingxBest('sell', amount)];
+    setPbCell('pbBingxBuy', xb);
+    setPbCell('pbBingxSell', xs);
     setPbCell('pbMexcBuy', mb);
     setPbCell('pbMexcSell', ms);
     setPbCell('pbBitgetBuy', bb);
@@ -875,6 +890,7 @@ async function fetchMexcBest(side, amount) {
 
 
   function bgLog(msg, type = '') {
+    exActivity('bitget', msg, type);
     const log = document.getElementById('bgLog');
     if (!log) return;
     const empty = log.querySelector('.ap-log-empty');
@@ -889,6 +905,7 @@ async function fetchMexcBest(side, amount) {
   }
 
   async function bgRunCycle() {
+    exCycle('bitget');
     const rows = state.bgApRows.filter(r => r.enabled && r.advId);
     if (!rows.length) return;
 
@@ -1004,6 +1021,7 @@ async function fetchMexcBest(side, amount) {
         const result = await api.post('/api/bitget/ads/update', payload);
 
         if (result.code === '00000') {
+          exCountUpdate('bitget');
           setStatus(`→ ${formatNumber(newPrice)} | SL ${formatNumber(quantity)}`, 'ok');
           bgLog(`[${truncateId(row.advId)}] ${row.side.toUpperCase()} | ref ${marketSide.toUpperCase()}: ${formatNumber(refPrice)} +${rowOffset} → ${formatNumber(newPrice)} | SL=${formatNumber(quantity)} | max=${formatNumber(maxAmount)}`, 'success');
         } else {
@@ -1347,6 +1365,7 @@ function renderBybitAds() {
   }
 
   async function byRunCycle() {
+    exCycle('bybit');
     const rows = state.byApRows.filter(r => r.enabled && r.advId);
     if (!rows.length) return;
 
@@ -1474,6 +1493,7 @@ function renderBybitAds() {
         const result = await api.post('/api/bybit/ads/update', payload);
         if (result.ret_code === 0) {
           myAd.price = newPrice;   // ★ cập nhật giá trong cache để vòng sau so sánh đúng
+          exCountUpdate('bybit');
           setStatus(`→ ${newPrice} | SL ${formatNumber(parseFloat(quantity))}`, 'ok');
           byLog(`[${truncateId(row.advId)}] ${row.side.toUpperCase()} ref ${isBuy ? 'SELL' : 'BUY'}: ${refPrice} +${offset} → ${newPrice} | SL=${quantity}`, 'success');
           // Reset refill tay về 0 sau khi cập nhật thành công (SELL / BUY giữ SL)
@@ -1493,6 +1513,7 @@ function renderBybitAds() {
   }
 
   function byLog(msg, type) {
+    exActivity('bybit', msg, type);
     const box = document.getElementById('byLog');
     if (!box) return;
     const empty = box.querySelector('.ap-log-empty');
@@ -1693,7 +1714,7 @@ function renderBybitAds() {
 
   function filterMyAds(filter) {
     state.myAdsFilter = filter;
-    document.querySelectorAll('.filter-chip').forEach(chip => {
+    document.querySelectorAll('#myAdsCard .filter-chip').forEach(chip => {
       chip.classList.toggle('active', chip.dataset.filter === filter);
     });
     applyMyAdsFilter();
@@ -2359,6 +2380,7 @@ function renderBybitAds() {
   }
 
   function apLog(msg, type = '') {
+    exActivity('mexc', msg, type);
     const log = document.getElementById('apLog');
     if (!log) return;
     const empty = log.querySelector('.ap-log-empty');
@@ -2380,6 +2402,7 @@ function renderBybitAds() {
   }
 
   function updateApStatusUI(running) {
+    setTimeout(renderExSummary, 0);
     const badge = document.getElementById('apStatusBadge');
     const startBtn = document.getElementById('apStartBtn');
     const stopBtn  = document.getElementById('apStopBtn');
@@ -2492,6 +2515,7 @@ function renderBybitAds() {
    * 1 vòng quét: duyệt qua tất cả ads đã bật, tìm giá tốt nhất, cập nhật nếu cần.
    */
   async function apRunCycle() {
+    exCycle('mexc');
     const ads = state.myAds;
     if (!ads || ads.length === 0) return;
 
@@ -2630,6 +2654,7 @@ function renderBybitAds() {
 
         if (result.code === 0) {
           ad.price = newPrice;
+          exCountUpdate('mexc');
           setApRowStatus(advNo, `Đã cập nhật → ${formatNumber(newPrice)}`, 'ok');
           apLog(`[${truncateId(advNo)}] ${side} | Best: ${formatNumber(bestPrice)} | Mới: ${formatNumber(newPrice)}`, 'success');
         } else {
@@ -2742,10 +2767,519 @@ function renderBybitAds() {
     document.getElementById('testUpdateResponse').style.display = 'none';
   }
 
+  // ═══════════════════════════════════════════════════════
+  // TAB CÁC SÀN + BẢNG TRẠNG THÁI CÁC SÀN
+  // ═══════════════════════════════════════════════════════
+
+  const EXCHANGES = ['mexc', 'bitget', 'bybit', 'bingx'];
+  const EX_LABEL = { mexc: 'MEXC', bitget: 'Bitget', bybit: 'Bybit', bingx: 'BingX' };
+  const exStatus = {};
+  EXCHANGES.forEach(ex => { exStatus[ex] = { lastCycle: null, updates: 0, lastMsg: '', lastType: '', lastAt: null }; });
+
+  function switchExchange(ex) {
+    if (!EXCHANGES.includes(ex)) ex = 'mexc';
+    document.querySelectorAll('.ex-tab').forEach(b => b.classList.toggle('active', b.dataset.ex === ex));
+    document.querySelectorAll('.ex-panel').forEach(p => p.classList.toggle('active', p.dataset.ex === ex));
+    try { localStorage.setItem('p2p.activeExchange', ex); } catch (_) {}
+  }
+
+  function restoreActiveExchange() {
+    let ex = 'mexc';
+    try { ex = localStorage.getItem('p2p.activeExchange') || 'mexc'; } catch (_) {}
+    switchExchange(ex);
+  }
+
+  // Ghi nhận hoạt động gần nhất (gọi từ các hàm log của từng sàn)
+  function exActivity(ex, msg, type) {
+    const s = exStatus[ex]; if (!s) return;
+    s.lastMsg = msg; s.lastType = type || ''; s.lastAt = Date.now();
+  }
+  function exCycle(ex) { if (exStatus[ex]) exStatus[ex].lastCycle = Date.now(); }
+  function exCountUpdate(ex) { if (exStatus[ex]) exStatus[ex].updates++; }
+
+  function exAgo(ts) {
+    if (!ts) return '—';
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 60) return `${s}s trước`;
+    if (s < 3600) return `${Math.floor(s / 60)}p trước`;
+    return new Date(ts).toLocaleTimeString('vi-VN');
+  }
+
+  function exInfo(ex) {
+    const val = id => document.getElementById(id)?.value;
+    switch (ex) {
+      case 'mexc': {
+        const enabled = (state.myAds || []).filter(a => state.apConfigs[a.advNo || a.davNo || '']?.enabled).length;
+        return {
+          connected: state.connected,
+          connNote: state.connected ? (state.secondaryConnected ? 'Chính + Phụ' : 'Chính (chưa có API phụ)') : '',
+          running: !!apTimer, enabled, total: (state.myAds || []).length, interval: val('apScanInterval'),
+        };
+      }
+      case 'bitget':
+        return {
+          connected: state.bgConnected, running: !!bgApTimer,
+          enabled: (state.bgApRows || []).filter(r => r.enabled && r.advId).length,
+          total: (state.bgApRows || []).length, interval: val('bgScanInterval'),
+        };
+      case 'bybit':
+        return {
+          connected: state.byConnected, running: !!byApTimer,
+          enabled: (state.byApRows || []).filter(r => r.enabled && r.advId).length,
+          total: (state.byApRows || []).length, interval: val('byScanInterval'),
+        };
+      case 'bingx':
+        return {
+          connected: state.bxConnected, running: !!bxTimer,
+          enabled: (state.bxAds || []).filter(a => state.bxConfigs[a.advertNo]?.enabled).length,
+          total: (state.bxAds || []).length, interval: val('bxScanInterval'),
+        };
+    }
+    return {};
+  }
+
+  function renderExSummary() {
+    const body = document.getElementById('exSummaryBody');
+    const rows = EXCHANGES.map(ex => {
+      const i = exInfo(ex), s = exStatus[ex];
+      // chấm trạng thái trên tab
+      const dot = document.getElementById(`exDot-${ex}`);
+      if (dot) dot.className = 'ex-dot' + (i.connected ? ' on' : '');
+      const run = document.getElementById(`exRun-${ex}`);
+      if (run) { run.textContent = i.running ? '▶' : ''; run.title = i.running ? 'Auto-pricer đang chạy' : ''; }
+
+      const conn = i.connected
+        ? `<span class="ex-pill ok">● Đã kết nối</span>${i.connNote ? `<div class="ex-sub">${escapeHtml(i.connNote)}</div>` : ''}`
+        : '<span class="ex-pill off">○ Chưa kết nối</span>';
+      const runCell = i.running ? '<span class="ex-pill run">▶ Đang chạy</span>' : '<span class="ex-pill off">⏹ Dừng</span>';
+      const msgCls = s.lastType === 'error' ? 'err' : s.lastType === 'warn' ? 'warn' : s.lastType === 'success' ? 'ok' : '';
+      const msg = s.lastMsg ? `<span class="ex-msg ${msgCls}" title="${escapeHtml(s.lastMsg)}">${escapeHtml(s.lastMsg)}</span><div class="ex-sub">${exAgo(s.lastAt)}</div>` : '<span class="ex-sub">—</span>';
+      return `<tr class="ex-row" onclick="App.switchExchange('${ex}')">
+        <td><strong>${EX_LABEL[ex]}</strong></td>
+        <td>${conn}</td>
+        <td>${runCell}</td>
+        <td class="mono-cell">${i.enabled} / ${i.total}</td>
+        <td class="mono-cell">${i.interval ? i.interval + 's' : '—'}</td>
+        <td class="mono-cell">${exAgo(s.lastCycle)}</td>
+        <td class="mono-cell">${s.updates}</td>
+        <td class="ex-msg-cell">${msg}</td>
+      </tr>`;
+    });
+    if (body) body.innerHTML = rows.join('');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // BINGX P2P — Kết nối, Ads của tôi, Auto-pricer
+  //   3.10 myAdvert (ads của tôi) · 3.1 advert/list (market) · 3.8 advert/modify (sửa giá)
+  // ═══════════════════════════════════════════════════════
+
+  let bxTimer = null;
+  const BX_PAY_TIME = { 1: '15 phút', 2: '30 phút', 3: '45 phút', 4: '1 giờ' };
+  const bxIsBuy = ad => Number(ad.tradeType) === 1;          // tradeType (góc nhìn merchant): 1 mua, 2 bán
+  const bxIsOnline = ad => Number(ad.status) === 0;          // status: 0 Listed (online), 1 Delisted (offline)
+  const bxCurrentPrice = ad => parseFloat(ad.fixedPrice);
+
+  function bxLog(msg, type = '') {
+    exActivity('bingx', msg, type);
+    const log = document.getElementById('bxLog');
+    if (!log) return;
+    const empty = log.querySelector('.ap-log-empty');
+    if (empty) empty.remove();
+    const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+    const entry = document.createElement('div');
+    entry.className = 'ap-log-entry';
+    entry.innerHTML = `<span class="ap-log-time">${time}</span><span class="ap-log-msg ${type}">${escapeHtml(msg)}</span>`;
+    log.insertBefore(entry, log.firstChild);
+    while (log.children.length > 200) log.removeChild(log.lastChild);
+  }
+
+  function clearBingxLog() {
+    const log = document.getElementById('bxLog');
+    if (log) log.innerHTML = '<div class="ap-log-empty">Chưa có hoạt động nào</div>';
+  }
+
+  function updateBxConnectionUI(connected) {
+    document.getElementById('bxStatusDot').className = 'status-dot' + (connected ? ' connected' : '');
+    document.getElementById('bxStatusText').textContent = connected ? 'Đã kết nối' : 'Chưa kết nối';
+    document.getElementById('bxConnectBtn').style.display = connected ? 'none' : 'inline-flex';
+    document.getElementById('bxDisconnectBtn').style.display = connected ? 'inline-flex' : 'none';
+    document.getElementById('bxCredentials').classList.toggle('locked', connected);
+  }
+
+  async function connectBingx() {
+    const apiKey = document.getElementById('bxApiKey').value.trim();
+    const secretKey = document.getElementById('bxSecretKey').value.trim();
+    const postMode = document.getElementById('bxPostMode').value;
+    if (!apiKey || !secretKey) { showToast('Vui lòng nhập API Key và Secret Key BingX', 'error'); return; }
+    setLoading(true, 'bxConnectBtn');
+    try {
+      const r = await api.post('/api/bingx/connect', { apiKey, secretKey, postMode });
+      if (r.code === 0) {
+        state.bxConnected = true;
+        updateBxConnectionUI(true);
+        showToast('Đã kết nối BingX', 'success');
+        restoreBingxPricerConfig();
+        setBingxAds(r.data?.result || []);
+        bxLog(`Kết nối BingX — ${state.bxAds.length} quảng cáo`, 'success');
+      } else {
+        showToast(`BingX: ${r.msg || 'Kết nối thất bại'} (code ${r.code})`, 'error');
+      }
+    } catch (err) {
+      showToast('Lỗi kết nối BingX: ' + err.message, 'error');
+    } finally {
+      setLoading(false, 'bxConnectBtn');
+    }
+  }
+
+  // Kiểm tra kết nối từng bước: mạng → market → API key/chữ ký → ads của tôi
+  async function diagnoseBingx() {
+    const apiKey = document.getElementById('bxApiKey').value.trim();
+    const secretKey = document.getElementById('bxSecretKey').value.trim();
+    if (!apiKey || !secretKey) { showToast('Nhập API Key và Secret Key BingX trước', 'error'); return; }
+    const box = document.getElementById('bxDiagResult');
+    box.style.display = 'flex';
+    box.innerHTML = '<div class="bx-diag-row">Đang kiểm tra...</div>';
+    setLoading(true, 'bxDiagBtn');
+    try {
+      const r = await api.post('/api/bingx/diagnose', { apiKey, secretKey });
+      if (r.code !== 0) { box.innerHTML = `<div class="bx-diag-row err">${escapeHtml(r.msg || 'Lỗi')}</div>`; return; }
+      box.innerHTML = r.data.map(s => `<div class="bx-diag-row ${s.ok ? 'ok' : 'err'}">
+          <div><strong>${s.ok ? '✅' : '❌'} ${escapeHtml(s.step)}</strong></div>
+          <div class="bx-diag-detail">${escapeHtml(s.detail || '')}</div>
+          ${s.hint ? `<div class="bx-diag-hint">→ ${escapeHtml(s.hint)}</div>` : ''}
+        </div>`).join('');
+    } catch (err) {
+      box.innerHTML = `<div class="bx-diag-row err">${escapeHtml(err.message)}</div>`;
+    } finally {
+      setLoading(false, 'bxDiagBtn');
+    }
+  }
+
+  async function disconnectBingx() {
+    if (bxTimer) stopBingxPricer();
+    await api.post('/api/bingx/disconnect');
+    state.bxConnected = false;
+    state.bxAds = [];
+    updateBxConnectionUI(false);
+    renderBingxAds();
+    renderBingxPricerTable();
+    showToast('Đã ngắt BingX', 'info');
+  }
+
+  async function saveBingxCreds() {
+    const data = {
+      apiKey: document.getElementById('bxApiKey').value.trim(),
+      secretKey: document.getElementById('bxSecretKey').value.trim(),
+      postMode: document.getElementById('bxPostMode').value,
+    };
+    const r = await api.post('/api/settings/bingx', data);
+    if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu đăng nhập BingX', 'success'); }
+    else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+  }
+
+  function setBingxAds(list) {
+    state.bxAds = list || [];
+    state.bxAdvNos = new Set(state.bxAds.map(a => String(a.advertNo)));
+    renderBingxAds();
+    renderBingxPricerTable();
+  }
+
+  async function loadBingxAds(silent = false) {
+    if (!state.bxConnected) return false;
+    try {
+      const r = await api.get('/api/bingx/my-ads');
+      if (r.code === 0) { setBingxAds(r.data?.result || []); return true; }
+      if (!silent) showToast(`BingX: ${r.msg || 'Lỗi lấy ads'}`, 'error');
+      bxLog(`Lỗi lấy ads của tôi: ${r.msg || r.code}`, 'error');
+    } catch (err) {
+      if (!silent) showToast('Lỗi: ' + err.message, 'error');
+      bxLog(`Lỗi lấy ads của tôi: ${err.message}`, 'error');
+    }
+    return false;
+  }
+
+  function filterBingxAds(filter) {
+    state.bxAdsFilter = filter;
+    document.querySelectorAll('.bx-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === filter));
+    renderBingxAds();
+  }
+
+  function renderBingxAds() {
+    const tbody = document.getElementById('bxAdsBody');
+    if (!tbody) return;
+    const all = state.bxAds || [];
+    const on = all.filter(bxIsOnline).length;
+    const cnt = document.getElementById('bxAdsCount');
+    if (cnt) cnt.textContent = all.length ? `${all.length} ads · ${on} online · ${all.length - on} offline` : '';
+
+    const f = state.bxAdsFilter || 'ALL';
+    const ads = all.filter(a => f === 'ALL' || (f === 'ON' ? bxIsOnline(a) : !bxIsOnline(a)));
+    if (!ads.length) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="9"><div class="empty-state"><p>${state.bxConnected ? 'Không có quảng cáo' : 'Kết nối BingX để xem quảng cáo'}</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = ads.map(ad => {
+      const buy = bxIsBuy(ad), online = bxIsOnline(ad);
+      const price = Number(ad.priceType) === 2
+        ? `<span title="Giá thả nổi">${escapeHtml(String(ad.floatRatio))}%</span>`
+        : formatNumber(bxCurrentPrice(ad));
+      const pays = (ad.paymentMethods || []).map(p => escapeHtml(p.name || String(p.id))).join(', ') || '—';
+      return `<tr>
+        <td class="mono-cell" title="${escapeHtml(String(ad.advertNo))}">${truncateId(String(ad.advertNo))}</td>
+        <td><span class="side-badge ${buy ? 'side-buy' : 'side-sell'}">${buy ? 'MUA' : 'BÁN'}</span></td>
+        <td>${online ? '<span class="ex-pill ok">🟢 Online</span>' : '<span class="ex-pill off">🔴 Offline</span>'}</td>
+        <td>${escapeHtml(ad.asset || '')}/${escapeHtml(ad.fiatUnit || '')}</td>
+        <td class="mono-cell price-value ${buy ? 'price-buy' : 'price-sell'}">${price}</td>
+        <td class="mono-cell">${formatNumber(parseFloat(ad.totalNumber))}</td>
+        <td class="mono-cell">${formatNumber(parseFloat(ad.minAmount))} – ${formatNumber(parseFloat(ad.maxAmount))}</td>
+        <td>${pays}</td>
+        <td>${BX_PAY_TIME[ad.paymentTimeLimit] || escapeHtml(String(ad.paymentTimeLimit ?? '—'))}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function bxDefaultCfg() {
+    return { enabled: false, searchAmount: '', offset: 0, priceLimit: '', minTrades30d: '', minAmount: '', maxAmount: '', lastStatus: '' };
+  }
+
+  function renderBingxPricerTable() {
+    const tbody = document.getElementById('bxApTableBody');
+    if (!tbody) return;
+    const ads = state.bxAds || [];
+    if (!ads.length) {
+      tbody.innerHTML = `<tr><td colspan="10" class="ap-empty">${state.bxConnected ? 'Không có quảng cáo' : 'Kết nối BingX để cấu hình'}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = ads.map(ad => {
+      const no = String(ad.advertNo);
+      if (!state.bxConfigs[no]) state.bxConfigs[no] = bxDefaultCfg();
+      const c = state.bxConfigs[no];
+      const buy = bxIsBuy(ad), online = bxIsOnline(ad);
+      const inp = (field, w, ph) => `<input type="number" class="ap-num-input" style="width:${w}px" value="${escapeHtml(String(c[field] ?? ''))}" placeholder="${ph}" onchange="App.bxSetCfg('${no}','${field}',this.value)">`;
+      return `<tr>
+        <td><div style="display:flex;flex-direction:column;gap:2px">
+          <span class="mono-cell" style="font-size:11px" title="${no}">${truncateId(no)}</span>
+          <span style="display:flex;gap:4px"><span class="side-badge ${buy ? 'side-buy' : 'side-sell'}" style="font-size:10px">${buy ? 'MUA' : 'BÁN'}</span>
+          <span class="ex-sub">${online ? 'online' : 'offline'}</span></span></div></td>
+        <td><label class="toggle"><input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="App.bxSetCfg('${no}','enabled',this.checked)"><span class="toggle-slider"></span></label></td>
+        <td>${inp('searchAmount', 110, '—')}</td>
+        <td>${inp('offset', 80, '0')}</td>
+        <td>${inp('priceLimit', 100, buy ? 'Trần' : 'Sàn')}</td>
+        <td>${inp('minTrades30d', 70, '0')}</td>
+        <td>${inp('minAmount', 100, formatNumber(parseFloat(ad.minAmount)))}</td>
+        <td>${inp('maxAmount', 110, formatNumber(parseFloat(ad.maxAmount)))}</td>
+        <td class="mono-cell">${Number(ad.priceType) === 2 ? escapeHtml(String(ad.floatRatio)) + '%' : formatNumber(bxCurrentPrice(ad))}</td>
+        <td><span class="ap-row-status" id="bx-status-${no}">${escapeHtml(c.lastStatus) || '—'}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function bxSetCfg(no, field, value) {
+    const c = state.bxConfigs[no] || (state.bxConfigs[no] = bxDefaultCfg());
+    if (field === 'enabled') c.enabled = !!value;
+    else c[field] = value === '' ? '' : (isNaN(parseFloat(value)) ? value : parseFloat(value));
+    renderExSummary();
+  }
+
+  function setBxRowStatus(no, msg, type) {
+    const c = state.bxConfigs[no]; if (c) c.lastStatus = msg;
+    const el = document.getElementById(`bx-status-${no}`);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `ap-row-status${type ? ' ' + type : ''}`;
+  }
+
+  async function saveBingxPricer() {
+    const data = {
+      scanInterval: document.getElementById('bxScanInterval').value,
+      marketPages: document.getElementById('bxMarketPages').value,
+      configs: state.bxConfigs,
+    };
+    const r = await api.post('/api/settings/bingxPricer', data);
+    if (r.code === 0) { state.savedSettings = r.data; showToast('Đã lưu cấu hình auto-pricer BingX', 'success'); }
+    else showToast('Lỗi lưu: ' + (r.msg || ''), 'error');
+  }
+
+  function restoreBingxPricerConfig() {
+    const saved = state.savedSettings?.bingxPricer;
+    if (!saved) return;
+    if (saved.scanInterval) document.getElementById('bxScanInterval').value = saved.scanInterval;
+    if (saved.marketPages) document.getElementById('bxMarketPages').value = saved.marketPages;
+    if (saved.configs) {
+      for (const [no, cfg] of Object.entries(saved.configs)) state.bxConfigs[no] = { ...bxDefaultCfg(), ...cfg, lastStatus: '' };
+    }
+  }
+
+  // Lấy market 1 chiều. tradeType theo góc nhìn NGƯỜI DÙNG (taker):
+  //   1 = người dùng mua  → trả về ads BÁN của merchant
+  //   2 = người dùng bán  → trả về ads MUA của merchant
+  async function bxFetchMarket(tradeType, pages) {
+    const r = await api.get(`/api/bingx/market?asset=USDT&fiatUnit=VND&tradeType=${tradeType}&pages=${pages}`);
+    if (r.code !== 0) throw new Error(r.msg || `code ${r.code}`);
+    return r.data?.result || [];
+  }
+
+  // Chọn giá tốt nhất: ad MUA → giá cao nhất (≤ trần); ad BÁN → giá thấp nhất (≥ sàn)
+  function bxPickBest(items, { isBuyAd, reqAmount, priceLimit, minTrades30d }) {
+    const hasLimit = priceLimit !== '' && priceLimit != null && !isNaN(parseFloat(priceLimit));
+    const lim = hasLimit ? parseFloat(priceLimit) : null;
+    const wl = new Set((state.whitelist || []).map(n => n.toLowerCase()));
+    let best = null, bestAd = null;
+    for (const m of items) {
+      if (state.bxAdvNos?.has(String(m.advertNo))) continue;             // bỏ qua ads của chính mình
+      const p = parseFloat(m.price);
+      if (isNaN(p)) continue;
+      if (m.nickname && wl.has(String(m.nickname).toLowerCase())) continue;  // whitelist (chung với MEXC)
+      if (hasLimit && (isBuyAd ? p > lim : p < lim)) continue;
+      if (reqAmount > 0) {
+        const mn = parseFloat(m.minPerOrderAmount), mx = parseFloat(m.maxPerOrderAmount);
+        if (!isNaN(mn) && reqAmount < mn) continue;
+        if (!isNaN(mx) && reqAmount > mx) continue;
+      }
+      if (minTrades30d > 0 && (parseFloat(m.recent30DaysTradeNum) || 0) < minTrades30d) continue;
+      if (best === null || (isBuyAd ? p > best : p < best)) { best = p; bestAd = m; }
+    }
+    return best === null ? null : { price: best, ad: bestAd };
+  }
+
+  async function bxRunCycle() {
+    exCycle('bingx');
+    // Làm mới ads của tôi để có giá / trạng thái hiện tại chính xác
+    await loadBingxAds(true);
+    const active = (state.bxAds || []).filter(a => state.bxConfigs[String(a.advertNo)]?.enabled);
+    if (!active.length) return;
+
+    const pages = Math.min(10, Math.max(1, parseInt(document.getElementById('bxMarketPages')?.value) || 3));
+    let buyMarket = [], sellMarket = [];
+    try {
+      if (active.some(bxIsBuy)) {
+        buyMarket = await bxFetchMarket(2, pages);      // ads MUA của merchant khác
+        bxLog(`Market MUA: ${buyMarket.length} ads`);
+      }
+      if (active.some(a => !bxIsBuy(a))) {
+        sellMarket = await bxFetchMarket(1, pages);     // ads BÁN của merchant khác
+        bxLog(`Market BÁN: ${sellMarket.length} ads`);
+      }
+    } catch (err) {
+      bxLog(`Lỗi lấy market: ${err.message}`, 'error');
+      return;
+    }
+
+    let sentUpdate = false;
+    for (const ad of active) {
+      if (!bxTimer) break;                                 // đã bấm Dừng giữa vòng
+      const no = String(ad.advertNo);
+      const cfg = state.bxConfigs[no];
+      const isBuy = bxIsBuy(ad);
+      try {
+        setBxRowStatus(no, 'Đang quét...', '');
+        const best = bxPickBest(isBuy ? buyMarket : sellMarket, {
+          isBuyAd: isBuy,
+          reqAmount: parseFloat(cfg.searchAmount) || 0,
+          priceLimit: cfg.priceLimit,
+          minTrades30d: parseFloat(cfg.minTrades30d) || 0,
+        });
+        if (!best) {
+          setBxRowStatus(no, 'Không tìm được giá', 'warn');
+          bxLog(`[${truncateId(no)}] Không có ads đối thủ phù hợp bộ lọc`, 'warn');
+          continue;
+        }
+
+        let newPrice = best.price + (parseFloat(cfg.offset) || 0);
+        if (cfg.priceLimit !== '' && !isNaN(parseFloat(cfg.priceLimit))) {
+          const lim = parseFloat(cfg.priceLimit);
+          if (isBuy && newPrice > lim) newPrice = lim;
+          if (!isBuy && newPrice < lim) newPrice = lim;
+        }
+        newPrice = (ad.fiatUnit || 'VND') === 'VND' ? Math.round(newPrice) : Math.round(newPrice * 100) / 100;
+
+        // Chỉ sửa khi giá mới khác giá hiện tại
+        const current = bxCurrentPrice(ad);
+        if (Number(ad.priceType) !== 2 && newPrice === current) {
+          setBxRowStatus(no, `Giá OK: ${formatNumber(current)}`, 'ok');
+          continue;
+        }
+
+        if (sentUpdate) await sleep(600);                  // giới hạn sửa ad: 2 lần/giây
+        sentUpdate = true;
+        const body = { advertNo: no, price: String(newPrice) };
+        if (cfg.minAmount !== '' && cfg.minAmount != null) body.minAmount = String(cfg.minAmount);
+        if (cfg.maxAmount !== '' && cfg.maxAmount != null) body.maxAmount = String(cfg.maxAmount);
+        const r = await api.post('/api/bingx/ads/update-price', body);
+        if (r.code === 0) {
+          ad.fixedPrice = String(newPrice);
+          ad.priceType = 1;
+          exCountUpdate('bingx');
+          setBxRowStatus(no, `Đã cập nhật → ${formatNumber(newPrice)}`, 'ok');
+          bxLog(`[${truncateId(no)}] ${isBuy ? 'MUA' : 'BÁN'} | Best: ${formatNumber(best.price)} (${best.ad?.nickname || '?'}) | ${formatNumber(current)} → ${formatNumber(newPrice)}`, 'success');
+        } else {
+          setBxRowStatus(no, `Lỗi: ${r.msg || r.code}`, 'err');
+          bxLog(`[${truncateId(no)}] Lỗi sửa ad: ${r.msg || ''} (code ${r.code})`, 'error');
+        }
+      } catch (err) {
+        setBxRowStatus(no, `Lỗi: ${err.message}`, 'err');
+        bxLog(`[${truncateId(no)}] Exception: ${err.message}`, 'error');
+      }
+    }
+    renderBingxAds();
+    renderBingxPricerTable();
+  }
+
+  function updateBxApUI(running) {
+    const badge = document.getElementById('bxApBadge');
+    badge.textContent = running ? '▶ Đang chạy' : '⏹ Đã dừng';
+    badge.className = `ap-status-badge ${running ? 'running' : 'stopped'}`;
+    document.getElementById('bxStartBtn').style.display = running ? 'none' : 'inline-flex';
+    document.getElementById('bxStopBtn').style.display = running ? 'inline-flex' : 'none';
+    renderExSummary();
+  }
+
+  function startBingxPricer() {
+    if (bxTimer) return;
+    if (!state.bxConnected) { showToast('Chưa kết nối BingX', 'error'); return; }
+    const interval = Math.max(5, parseInt(document.getElementById('bxScanInterval').value) || 30) * 1000;
+    bxTimer = true;   // đánh dấu đang chạy trước vòng đầu
+    updateBxApUI(true);
+    bxLog(`Auto-pricer BingX bắt đầu — quét mỗi ${interval / 1000}s`, 'success');
+    const loop = async () => {
+      try { await bxRunCycle(); } catch (err) { bxLog(`Lỗi vòng quét: ${err.message}`, 'error'); }
+      if (bxTimer !== null) bxTimer = setTimeout(loop, interval);
+    };
+    bxTimer = setTimeout(loop, 0);
+  }
+
+  function stopBingxPricer() {
+    if (bxTimer && bxTimer !== true) clearTimeout(bxTimer);
+    bxTimer = null;
+    updateBxApUI(false);
+    bxLog('Auto-pricer BingX đã dừng', 'warn');
+  }
+
+  // Bảng giá thị trường: MUA = giá cao nhất của ads MUA, BÁN = giá thấp nhất của ads BÁN
+  async function fetchBingxBest(uiSide, amount) {
+    try {
+      const r = await api.get(`/api/bingx/market?asset=USDT&fiatUnit=VND&tradeType=${uiSide === 'buy' ? 2 : 1}&pages=1`);
+      if (r.code !== 0) return null;
+      let best = null;
+      for (const m of r.data?.result || []) {
+        const p = parseFloat(m.price);
+        if (isNaN(p)) continue;
+        if (amount > 0) {
+          const mn = parseFloat(m.minPerOrderAmount), mx = parseFloat(m.maxPerOrderAmount);
+          if (!isNaN(mn) && amount < mn) continue;
+          if (!isNaN(mx) && amount > mx) continue;
+        }
+        best = best === null ? p : (uiSide === 'buy' ? Math.max(best, p) : Math.min(best, p));
+      }
+      return best;
+    } catch (_) { return null; }
+  }
+
   // ─── Khởi tạo ────────────────────────────────────────
 
   async function init() {
     // ★ MỚI: Load whitelist ngay khi khởi động (không cần kết nối)
+    restoreActiveExchange();     // ★ mở lại tab sàn đã chọn lần trước
     await loadWhitelist();
     await loadSettings();        // ★ tải cấu hình đã lưu
     prefillCredentials();        // ★ điền sẵn thông tin đăng nhập
@@ -2778,6 +3312,13 @@ function renderBybitAds() {
       restoreBitgetPricerConfig(); // ★
     }
 
+    if (status.data?.bingxConnected) {
+      state.bxConnected = true;
+      updateBxConnectionUI(true);
+      restoreBingxPricerConfig();
+      await loadBingxAds(true);
+    }
+
     if (status.data?.bybitConnected) {
       state.byConnected = true;
       updateBybitUI(true);
@@ -2793,6 +3334,8 @@ function renderBybitAds() {
     }
 
     renderBgApRows();
+    renderExSummary();
+    setInterval(renderExSummary, 1000);   // bảng trạng thái các sàn
   }
 
   // ─── Public API ──────────────────────────────────────
@@ -2863,6 +3406,19 @@ function renderBybitAds() {
     saveMexcAdText,
     resetMexcAdText,
     mexcAdTextPreview,
+    // ★ Tab sàn + BingX
+    switchExchange,
+    connectBingx,
+    disconnectBingx,
+    diagnoseBingx,
+    saveBingxCreds,
+    loadBingxAds,
+    filterBingxAds,
+    bxSetCfg,
+    startBingxPricer,
+    stopBingxPricer,
+    saveBingxPricer,
+    clearBingxLog,
   };
 })();
 

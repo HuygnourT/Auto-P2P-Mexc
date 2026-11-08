@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MEXC P2P System</title>
+  <title>P2P Auto System</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/whitelist.css">
 </head>
@@ -16,34 +16,17 @@
       <div class="logo-section">
         <div class="logo-icon">P2P</div>
         <div class="logo-text">
-          <h1>MEXC P2P System</h1>
-          <span>v1.0 · Automated Trading</span>
+          <h1>P2P Auto System</h1>
+          <span>MEXC · Bitget · Bybit · BingX</span>
         </div>
       </div>
-      <div class="connection-status">
+      <div class="connection-status" title="Trạng thái kết nối MEXC (API chính)">
         <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Chưa kết nối</span>
+        <span>MEXC:</span> <span id="statusText">Chưa kết nối</span>
       </div>
     </header>
 
-    <!-- ★ MỚI: CARD GIÁ BINANCE P2P -->
-    <!-- <div class="card" id="binancePriceCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        Giá Binance P2P USDT/VND
-        <span class="card-subtitle">Nguồn: pricedancing.com</span>
-        <span class="wl-count" id="bnPriceCountdown"></span>
-      </div>
-      <div style="display:flex;align-items:center;gap:20px;padding:8px 0">
-        <span style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--green)" id="bnPriceValue">—</span>
-        <span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)" id="bnPriceTime">Chưa cập nhật</span>
-        <a href="https://www.pricedancing.com/vi/Binance-P2P-USDT-VND-chart-ZqzaQWc" target="_blank" style="margin-left:auto;font-size:11px;color:var(--accent-blue);text-decoration:none">Xem biểu đồ ↗</a>
-      </div>
-    </div> -->
-
-    <!-- ★ KHUNG GIÁ THỊ TRƯỜNG (MEXC + Bitget) -->
+    <!-- KHUNG GIÁ THỊ TRƯỜNG (tất cả sàn) -->
     <div class="card" id="priceBoardCard">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l3-3 4 4 5-6"/></svg>
@@ -76,486 +59,375 @@
               <td id="pbBybitBuy" class="mono-cell price-value price-buy">—</td>
               <td id="pbBybitSell" class="mono-cell price-value price-sell">—</td>
             </tr>
+            <tr>
+              <td><strong>BingX</strong></td>
+              <td id="pbBingxBuy" class="mono-cell price-value price-buy">—</td>
+              <td id="pbBingxSell" class="mono-cell price-value price-sell">—</td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- CARD: KẾT NỐI API CHÍNH (MEXC) -->
-    <div class="card">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-        Thông tin kết nối API
-      </div>
-      <div id="credentialInputs">
-        <div class="form-grid">
-          <div class="form-group"><label>API KEY</label><div class="input-wrapper"><input type="text" id="apiKey" placeholder="Nhập API Key..." autocomplete="off" spellcheck="false"></div></div>
-          <div class="form-group"><label>SECRET KEY</label><div class="input-wrapper"><input type="password" id="secretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey')" type="button">👁</button></div></div>
-        </div>
-        <div class="host-select-row"><div class="form-group"><label>API HOST</label><select id="apiHost"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="connectBtn" onclick="App.connect()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối</button>
-        <button class="btn btn-danger" id="disconnectBtn" style="display:none" onclick="App.disconnect()">Ngắt kết nối</button>
-        <button class="btn btn-ghost" onclick="App.saveMexcCreds()">💾 Lưu đăng nhập</button>
-      </div>
-    </div>
+    <!-- THANH TAB CÁC SÀN -->
+    <nav class="ex-tabs" role="tablist">
+      <button class="ex-tab active" data-ex="mexc" role="tab" onclick="App.switchExchange('mexc')"><span class="ex-dot" id="exDot-mexc"></span>MEXC<span class="ex-run" id="exRun-mexc"></span></button>
+      <button class="ex-tab" data-ex="bitget" role="tab" onclick="App.switchExchange('bitget')"><span class="ex-dot" id="exDot-bitget"></span>Bitget<span class="ex-run" id="exRun-bitget"></span></button>
+      <button class="ex-tab" data-ex="bybit" role="tab" onclick="App.switchExchange('bybit')"><span class="ex-dot" id="exDot-bybit"></span>Bybit<span class="ex-run" id="exRun-bybit"></span></button>
+      <button class="ex-tab" data-ex="bingx" role="tab" onclick="App.switchExchange('bingx')"><span class="ex-dot" id="exDot-bingx"></span>BingX<span class="ex-run" id="exRun-bingx"></span></button>
+    </nav>
 
-    <!-- CARD: KẾT NỐI API PHỤ (MEXC Market) -->
-    <div class="card">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-        Kết nối API phụ
-        <span class="card-subtitle">Dùng để lấy dữ liệu P2P Market</span>
-        <div class="secondary-status-badge" id="secondaryStatusBadge"><span class="status-dot" id="secondaryStatusDot"></span><span id="secondaryStatusText">Chưa kết nối</span></div>
-      </div>
-      <div id="secondaryCredentialInputs">
-        <div class="form-grid">
-          <div class="form-group"><label>API KEY (phụ)</label><div class="input-wrapper"><input type="text" id="apiKey2" placeholder="Nhập API Key phụ..." autocomplete="off" spellcheck="false"></div></div>
-          <div class="form-group"><label>SECRET KEY (phụ)</label><div class="input-wrapper"><input type="password" id="secretKey2" placeholder="Nhập Secret Key phụ..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey2')" type="button">👁</button></div></div>
+    <!-- ═══════════════ TAB: MEXC ═══════════════ -->
+    <section class="ex-panel active" id="exPanel-mexc" data-ex="mexc">
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          Kết nối API chính (MEXC)
         </div>
-        <div class="host-select-row"><div class="form-group"><label>API HOST (phụ)</label><select id="apiHost2"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
+        <div id="credentialInputs">
+          <div class="form-grid">
+            <div class="form-group"><label>API KEY</label><div class="input-wrapper"><input type="text" id="apiKey" placeholder="Nhập API Key..." autocomplete="off" spellcheck="false"></div></div>
+            <div class="form-group"><label>SECRET KEY</label><div class="input-wrapper"><input type="password" id="secretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey')" type="button">👁</button></div></div>
+          </div>
+          <div class="host-select-row"><div class="form-group"><label>API HOST</label><select id="apiHost"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="connectBtn" onclick="App.connect()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối</button>
+          <button class="btn btn-danger" id="disconnectBtn" style="display:none" onclick="App.disconnect()">Ngắt kết nối</button>
+          <button class="btn btn-ghost" onclick="App.saveMexcCreds()">💾 Lưu đăng nhập</button>
+        </div>
       </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="connectBtn2" onclick="App.connectSecondary()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối phụ</button>
-        <button class="btn btn-danger" id="disconnectBtn2" style="display:none" onclick="App.disconnectSecondary()">Ngắt kết nối phụ</button>
-      </div>
-    </div>
 
-    <div class="card" id="bybitCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-        Bybit P2P
-        <span class="card-subtitle" id="byConnStatus">Chưa kết nối</span>
-      </div>
-      <div class="form-grid">
-        <div class="form-group"><label>API Key</label><input type="text" id="byApiKey" spellcheck="false"></div>
-        <div class="form-group"><label>API Secret</label><input type="password" id="byApiSecret" spellcheck="false"></div>
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-primary" id="byConnectBtn" onclick="App.connectBybit()">Kết nối</button>
-        <button class="btn btn-danger" id="byDisconnectBtn" style="display:none" onclick="App.disconnectBybit()">Ngắt</button>
-        <button class="btn btn-ghost" onclick="App.saveBybitCreds()">💾 Lưu đăng nhập</button>
-      </div>
-      <div id="byAdsSection" style="display:none;margin-top:16px">
-        <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo của tôi
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button>
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          Kết nối API phụ
+          <span class="card-subtitle">Dùng để lấy dữ liệu P2P Market</span>
+          <div class="secondary-status-badge" id="secondaryStatusBadge"><span class="status-dot" id="secondaryStatusDot"></span><span id="secondaryStatusText">Chưa kết nối</span></div>
         </div>
-        <div class="table-wrapper">
-          <table>
-            <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
-            <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
+        <div id="secondaryCredentialInputs">
+          <div class="form-grid">
+            <div class="form-group"><label>API KEY (phụ)</label><div class="input-wrapper"><input type="text" id="apiKey2" placeholder="Nhập API Key phụ..." autocomplete="off" spellcheck="false"></div></div>
+            <div class="form-group"><label>SECRET KEY (phụ)</label><div class="input-wrapper"><input type="password" id="secretKey2" placeholder="Nhập Secret Key phụ..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey2')" type="button">👁</button></div></div>
+          </div>
+          <div class="host-select-row"><div class="form-group"><label>API HOST (phụ)</label><select id="apiHost2"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="connectBtn2" onclick="App.connectSecondary()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối phụ</button>
+          <button class="btn btn-danger" id="disconnectBtn2" style="display:none" onclick="App.disconnectSecondary()">Ngắt kết nối phụ</button>
+        </div>
+      </div>
+
+      <div class="card" id="myAdsCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          Quảng cáo của tôi
+          <button class="btn btn-ghost btn-sm" onclick="App.loadMyAds()" title="Làm mới" style="margin-left:auto"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Làm mới</button>
+        </div>
+        <div class="my-ads-filters">
+          <button class="filter-chip active" data-filter="ALL" onclick="App.filterMyAds('ALL')">Tất cả</button>
+          <button class="filter-chip" data-filter="OPEN" onclick="App.filterMyAds('OPEN')">🟢 Đang mở</button>
+          <button class="filter-chip" data-filter="CLOSE" onclick="App.filterMyAds('CLOSE')">🔴 Đã đóng</button>
+        </div>
+        <div class="table-wrapper" id="myAdsTableWrapper">
+          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Khả dụng / Tổng</th><th>Giới hạn</th><th>Fiat</th><th>Thanh toán</th><th>Ngày tạo</th><th></th></tr></thead>
+          <tbody id="myAdsTableBody"><tr class="empty-row"><td colspan="11"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><p>Kết nối để xem quảng cáo của bạn</p></div></td></tr></tbody>
           </table>
         </div>
+        <div class="pagination" id="myAdsPagination"></div>
       </div>
-    </div>
 
-    <!-- CARD: QUẢNG CÁO CỦA TÔI (MEXC) -->
-    <div class="card" id="myAdsCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        Quảng cáo của tôi
-        <button class="btn btn-ghost btn-sm" onclick="App.loadMyAds()" title="Làm mới" style="margin-left:auto"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Làm mới</button>
-      </div>
-      <div class="my-ads-filters">
-        <button class="filter-chip active" data-filter="ALL" onclick="App.filterMyAds('ALL')">Tất cả</button>
-        <button class="filter-chip" data-filter="OPEN" onclick="App.filterMyAds('OPEN')">🟢 Đang mở</button>
-        <button class="filter-chip" data-filter="CLOSE" onclick="App.filterMyAds('CLOSE')">🔴 Đã đóng</button>
-      </div>
-      <div class="table-wrapper" id="myAdsTableWrapper">
-        <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Khả dụng / Tổng</th><th>Giới hạn</th><th>Fiat</th><th>Thanh toán</th><th>Ngày tạo</th><th></th></tr></thead>
-        <tbody id="myAdsTableBody"><tr class="empty-row"><td colspan="11"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><p>Kết nối để xem quảng cáo của bạn</p></div></td></tr></tbody>
-        </table>
-      </div>
-      <div class="pagination" id="myAdsPagination"></div>
-    </div>
-
-    <!-- CARD: WHITELIST THƯƠNG NHÂN -->
-    <div class="card" id="whitelistCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        Whitelist thương nhân
-        <span class="card-subtitle">Bỏ qua không xét giá của các thương nhân này khi auto-pricer tìm giá</span>
-        <span class="wl-count" id="wlCount"></span>
-      </div>
-      <div class="wl-container">
-        <div class="wl-input-row">
-          <input type="text" id="wlInput" placeholder="Nhập tên thương nhân (nickName)..." spellcheck="false" onkeydown="if(event.key==='Enter') App.addWhitelistMerchant()">
-          <button class="btn btn-primary btn-sm" onclick="App.addWhitelistMerchant()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14m-7-7h14"/></svg> Thêm</button>
+      <div class="card" id="whitelistCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          Whitelist thương nhân
+          <span class="card-subtitle">Bỏ qua không xét giá của các thương nhân này khi auto-pricer tìm giá</span>
+          <span class="wl-count" id="wlCount"></span>
         </div>
-        <div class="wl-chips" id="wlChips"><span class="wl-empty" id="wlEmpty">Chưa có thương nhân nào trong whitelist</span></div>
-      </div>
-    </div>
-
-    <!-- ★ MỚI: CARD BITGET P2P -->
-    <div class="card" id="bitgetCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        Bitget P2P
-        <span class="card-subtitle">Kết nối và auto-pricer cho sàn Bitget</span>
-        <div class="secondary-status-badge" id="bgStatusBadge"><span class="status-dot" id="bgStatusDot"></span><span id="bgStatusText">Chưa kết nối</span></div>
-      </div>
-
-      <div id="bgCredentials">
-        <div class="form-grid">
-          <div class="form-group"><label>API KEY (Bitget)</label><input type="text" id="bgApiKey" placeholder="Nhập Bitget API Key..." autocomplete="off" spellcheck="false"></div>
-          <div class="form-group"><label>SECRET KEY (Bitget)</label><div class="input-wrapper"><input type="password" id="bgSecretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('bgSecretKey')" type="button">👁</button></div></div>
-        </div>
-        <div class="form-grid" style="margin-top:10px">
-          <div class="form-group"><label>PASSPHRASE</label><div class="input-wrapper"><input type="password" id="bgPassphrase" placeholder="Nhập Passphrase..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('bgPassphrase')" type="button">👁</button></div></div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="bgConnectBtn" onclick="App.connectBitget()">Kết nối Bitget</button>
-        <button class="btn btn-danger" id="bgDisconnectBtn" style="display:none" onclick="App.disconnectBitget()">Ngắt kết nối</button>
-        <button class="btn btn-ghost" onclick="App.saveBitgetCreds()">💾 Lưu đăng nhập</button>
-      </div>
-
-      <!-- Danh sách ads Bitget -->
-      <div style="margin-top:16px">
-        <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo Bitget của tôi
-          <button class="btn btn-ghost btn-sm" onclick="App.loadBitgetAds()" style="margin-left:auto">Làm mới</button>
-        </div>
-        <div class="table-wrapper" id="bgAdsWrapper">
-          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Còn lại / Tổng</th><th>Thanh toán</th><th>Ngày tạo</th></tr></thead>
-          <tbody id="bgAdsTableBody"><tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Kết nối Bitget để xem</p></div></td></tr></tbody>
-          </table>
+        <div class="wl-container">
+          <div class="wl-input-row">
+            <input type="text" id="wlInput" placeholder="Nhập tên thương nhân (nickName)..." spellcheck="false" onkeydown="if(event.key==='Enter') App.addWhitelistMerchant()">
+            <button class="btn btn-primary btn-sm" onclick="App.addWhitelistMerchant()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14m-7-7h14"/></svg> Thêm</button>
+          </div>
+          <div class="wl-chips" id="wlChips"><span class="wl-empty" id="wlEmpty">Chưa có thương nhân nào trong whitelist</span></div>
         </div>
       </div>
 
-    <!-- Auto-pricer Bitget -->
-      <div style="margin-top:16px">
-        <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bitget
-          <span class="card-subtitle">BUY chỉnh theo giá SELL · SELL chỉnh theo giá BUY</span>
+      <div class="card" id="mexcAdTextCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.84L3 20l1.4-3.72A7.4 7.4 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          Nội dung quảng cáo MEXC
+          <span class="card-subtitle" id="mexcAdTextStatus">Nhập Tiếng Việt · tự convert UTF-8 khi gửi lên MEXC</span>
+        </div>
+        <div class="adtext-grid">
+          <div class="form-group">
+            <label for="mexcAutoReplyMsg">Automated Reply <span class="adtext-count" id="mexcAutoReplyMsgCount"></span></label>
+            <textarea id="mexcAutoReplyMsg" class="adtext-input" rows="7" placeholder="Tin nhắn tự động gửi cho người mua/bán khi tạo lệnh" oninput="App.mexcAdTextPreview()"></textarea>
+            <details class="adtext-encoded">
+              <summary>Xem dạng UTF-8 (gửi lên API)</summary>
+              <pre id="mexcAutoReplyMsgEncoded"></pre>
+            </details>
+          </div>
+          <div class="form-group">
+            <label for="mexcTradeTerms">Advertiser Terms <span class="adtext-count" id="mexcTradeTermsCount"></span></label>
+            <textarea id="mexcTradeTerms" class="adtext-input" rows="7" placeholder="Điều khoản giao dịch của nhà quảng cáo (để trống = không gửi)" oninput="App.mexcAdTextPreview()"></textarea>
+            <details class="adtext-encoded">
+              <summary>Xem dạng UTF-8 (gửi lên API)</summary>
+              <pre id="mexcTradeTermsEncoded"></pre>
+            </details>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="App.saveMexcAdText()">💾 Lưu nội dung</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.loadMexcAdText()">↺ Tải lại</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.resetMexcAdText()">Khôi phục mặc định</button>
+        </div>
+        <p class="adtext-hint">Nội dung đã lưu sẽ được dùng mỗi lần auto-pricer cập nhật quảng cáo (save_or_update). Có thể dán cả chuỗi đã encode (%E1%BB%8B…) — hệ thống tự đổi về Tiếng Việt.</p>
+      </div>
+
+      <div class="card" id="autoPricerCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Tự động chỉnh giá
+          <span class="card-subtitle">Tự động cập nhật giá theo thị trường</span>
         </div>
         <div class="ap-controls">
-          <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="bgScanInterval" class="filter-input" value="1" min="1" step="1"><span class="filter-unit">giây</span></div></div>
-          <div class="market-filter-group"><label class="filter-label">Offset BUY</label><div class="filter-input-unit"><input type="number" id="bgOffsetBuy" class="filter-input" value="-50"><span class="filter-unit">VND</span></div></div>
-          <div class="market-filter-group"><label class="filter-label">Offset SELL</label><div class="filter-input-unit"><input type="number" id="bgOffsetSell" class="filter-input" value="50"><span class="filter-unit">VND</span></div></div>
-          <button class="btn btn-ghost btn-sm" onclick="App.bgApAddRow()">➕ Thêm dòng</button>
-          <button class="btn btn-primary btn-sm" id="bgStartBtn" onclick="App.startBitgetPricer()">▶ Bắt đầu</button>
-          <button class="btn btn-danger btn-sm" id="bgStopBtn" style="display:none" onclick="App.stopBitgetPricer()">⏹ Dừng</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.saveBitgetPricer()">💾 Lưu cấu hình</button>
-          <span class="ap-status-badge stopped" id="bgApBadge">⏹ Đã dừng</span>
+          <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="apScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
+          <button class="btn btn-primary btn-sm" id="apStartBtn" onclick="App.startAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
+          <button class="btn btn-danger btn-sm" id="apStopBtn" style="display:none" onclick="App.stopAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.saveMexcPricer()">💾 Lưu cấu hình</button>
+          <span class="ap-status-badge stopped" id="apStatusBadge">⏹ Đã dừng</span>
         </div>
         <div class="ap-table-wrap">
-          <table class="ap-table"><thead><tr><th>Loại</th><th>advId</th><th>Bật</th><th>SL tìm giá</th><th>Offset</th><th>Trần / Sàn</th><th>Min</th><th>Max</th><th>Số lượng</th><th>Refill khi &lt;</th><th>Refill SL</th><th>Trạng thái</th><th></th></tr></thead>
-          <tbody id="bgApTableBody"><tr><td colspan="13" class="ap-empty">Chưa có dòng nào. Bấm "➕ Thêm dòng" để cấu hình.</td></tr></tbody>
+          <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th>Số lượng GD</th><th>Online ≤ (phút)</th><th>Offset</th><th title="BUY: giá không được vượt quá. SELL: giá không được thấp hơn">Trần / Sàn</th><th title="Refill khi số lượng khả dụng thấp hơn ngưỡng này">Refill khi &lt;</th><th>Refill SL</th><th>Min trans</th><th>Max trans</th><th title="Bỏ qua merchant đối thủ có tổng số GD ít hơn giá trị này">User GD min</th><th title="Bỏ qua merchant đối thủ có tổng số GD nhiều hơn giá trị này">User GD max</th><th title="Bỏ qua ads đối thủ có maxSingleTransAmount lớn hơn giá trị này">Max trans cap</th><th title="Phương thức thanh toán — chỉ áp dụng cho ads SELL (mặc định 1799581)">PayMethod (SELL)</th><th>Trạng thái</th></tr></thead>
+          <tbody id="apTableBody"><tr><td colspan="15" class="ap-empty">Kết nối API chính để cấu hình</td></tr></tbody>
           </table>
         </div>
-        <div style="margin-top:10px">
-          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bitget</label>
-          <div class="ap-log" id="bgLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
+        <div style="margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký hoạt động</label>
+            <button class="btn btn-ghost btn-sm" onclick="App.clearAutoPricerLog()">Xóa log</button>
+          </div>
+          <div class="ap-log" id="apLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
         </div>
       </div>
+    </section>
 
-    <!-- Test lấy thông tin Ad -->
-    <!-- <div style="margin-top:16px">
-      <div class="card-title" style="font-size:12px;margin-bottom:12px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.6"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        Tra cứu Ad theo ID
-      </div>
-      <div class="wl-input-row">
-        <input type="text" id="bgAdvIdInput" placeholder="Nhập advId..." spellcheck="false" onkeydown="if(event.key==='Enter') App.lookupBitgetAd()">
-        <button class="btn btn-primary btn-sm" id="bgLookupBtn" onclick="App.lookupBitgetAd()">Tra cứu</button>
-      </div>
-      <div id="bgAdInfoResult" style="display:none;margin-top:10px">
-        <div style="padding:14px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm)">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px" id="bgAdInfoGrid"></div>
+    <!-- ═══════════════ TAB: BITGET ═══════════════ -->
+    <section class="ex-panel" id="exPanel-bitget" data-ex="bitget">
+      <div class="card" id="bitgetCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Bitget P2P
+          <span class="card-subtitle">Kết nối và auto-pricer cho sàn Bitget</span>
+          <div class="secondary-status-badge" id="bgStatusBadge"><span class="status-dot" id="bgStatusDot"></span><span id="bgStatusText">Chưa kết nối</span></div>
+        </div>
+
+        <div id="bgCredentials">
+          <div class="form-grid">
+            <div class="form-group"><label>API KEY (Bitget)</label><input type="text" id="bgApiKey" placeholder="Nhập Bitget API Key..." autocomplete="off" spellcheck="false"></div>
+            <div class="form-group"><label>SECRET KEY (Bitget)</label><div class="input-wrapper"><input type="password" id="bgSecretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('bgSecretKey')" type="button">👁</button></div></div>
+          </div>
+          <div class="form-grid" style="margin-top:10px">
+            <div class="form-group"><label>PASSPHRASE</label><div class="input-wrapper"><input type="password" id="bgPassphrase" placeholder="Nhập Passphrase..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('bgPassphrase')" type="button">👁</button></div></div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="bgConnectBtn" onclick="App.connectBitget()">Kết nối Bitget</button>
+          <button class="btn btn-danger" id="bgDisconnectBtn" style="display:none" onclick="App.disconnectBitget()">Ngắt kết nối</button>
+          <button class="btn btn-ghost" onclick="App.saveBitgetCreds()">💾 Lưu đăng nhập</button>
+        </div>
+
+        <!-- Danh sách ads Bitget -->
+        <div style="margin-top:16px">
+          <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo Bitget của tôi
+            <button class="btn btn-ghost btn-sm" onclick="App.loadBitgetAds()" style="margin-left:auto">Làm mới</button>
+          </div>
+          <div class="table-wrapper" id="bgAdsWrapper">
+            <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Còn lại / Tổng</th><th>Thanh toán</th><th>Ngày tạo</th></tr></thead>
+            <tbody id="bgAdsTableBody"><tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Kết nối Bitget để xem</p></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      <!-- Auto-pricer Bitget -->
+        <div style="margin-top:16px">
+          <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bitget
+            <span class="card-subtitle">BUY chỉnh theo giá SELL · SELL chỉnh theo giá BUY</span>
+          </div>
+          <div class="ap-controls">
+            <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="bgScanInterval" class="filter-input" value="1" min="1" step="1"><span class="filter-unit">giây</span></div></div>
+            <div class="market-filter-group"><label class="filter-label">Offset BUY</label><div class="filter-input-unit"><input type="number" id="bgOffsetBuy" class="filter-input" value="-50"><span class="filter-unit">VND</span></div></div>
+            <div class="market-filter-group"><label class="filter-label">Offset SELL</label><div class="filter-input-unit"><input type="number" id="bgOffsetSell" class="filter-input" value="50"><span class="filter-unit">VND</span></div></div>
+            <button class="btn btn-ghost btn-sm" onclick="App.bgApAddRow()">➕ Thêm dòng</button>
+            <button class="btn btn-primary btn-sm" id="bgStartBtn" onclick="App.startBitgetPricer()">▶ Bắt đầu</button>
+            <button class="btn btn-danger btn-sm" id="bgStopBtn" style="display:none" onclick="App.stopBitgetPricer()">⏹ Dừng</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.saveBitgetPricer()">💾 Lưu cấu hình</button>
+            <span class="ap-status-badge stopped" id="bgApBadge">⏹ Đã dừng</span>
+          </div>
+          <div class="ap-table-wrap">
+            <table class="ap-table"><thead><tr><th>Loại</th><th>advId</th><th>Bật</th><th>SL tìm giá</th><th>Offset</th><th>Trần / Sàn</th><th>Min</th><th>Max</th><th>Số lượng</th><th>Refill khi &lt;</th><th>Refill SL</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody id="bgApTableBody"><tr><td colspan="13" class="ap-empty">Chưa có dòng nào. Bấm "➕ Thêm dòng" để cấu hình.</td></tr></tbody>
+            </table>
+          </div>
           <div style="margin-top:10px">
-            <label style="font-size:11px;font-weight:600;color:var(--text-muted)">RAW JSON</label>
-            <pre id="bgAdInfoRaw" style="margin-top:4px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;background:var(--bg-input);padding:8px;border-radius:var(--radius-sm)"></pre>
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bitget</label>
+            <div class="ap-log" id="bgLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
           </div>
         </div>
       </div>
-    </div> -->
+    </section>
 
-    <!-- Bitget Market Ads -->
-    <!-- <div style="margin-top:16px">
-      <div class="card-title" style="font-size:12px;margin-bottom:12px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.6"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-        Quảng cáo P2P Bitget Market
-      </div>
-      <div class="market-filter-bar">
-        <div class="market-filter-group">
-          <label class="filter-label">Số lượng (Amount)</label>
-          <div class="filter-input-unit">
-            <input type="number" id="bgFilterAmount" class="filter-input" placeholder="Bỏ trống = tất cả" min="0" step="1">
-            <span class="filter-unit">VND</span>
+    <!-- ═══════════════ TAB: BYBIT ═══════════════ -->
+    <section class="ex-panel" id="exPanel-bybit" data-ex="bybit">
+      <div class="card" id="bybitCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          Bybit P2P
+          <span class="card-subtitle" id="byConnStatus">Chưa kết nối</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group"><label>API Key</label><input type="text" id="byApiKey" spellcheck="false"></div>
+          <div class="form-group"><label>API Secret</label><input type="password" id="byApiSecret" spellcheck="false"></div>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary" id="byConnectBtn" onclick="App.connectBybit()">Kết nối</button>
+          <button class="btn btn-danger" id="byDisconnectBtn" style="display:none" onclick="App.disconnectBybit()">Ngắt</button>
+          <button class="btn btn-ghost" onclick="App.saveBybitCreds()">💾 Lưu đăng nhập</button>
+        </div>
+        <div id="byAdsSection" style="display:none;margin-top:16px">
+          <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo của tôi
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
+              <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
+            </table>
           </div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="App.loadBgMarket()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
-          Tải dữ liệu
-        </button>
-      </div>
-      <div class="tabs-header">
-        <button class="tab-btn active" data-tab="bgBuy" onclick="App.switchBgMarketTab('buy')">🟢 Mua (BUY)</button>
-        <button class="tab-btn" data-tab="bgSell" onclick="App.switchBgMarketTab('sell')">🔴 Bán (SELL)</button>
-        <div class="tabs-actions">
-          <button class="btn btn-ghost btn-sm" onclick="App.loadBgMarket()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            Làm mới
-          </button>
+
+        <div style="margin-top:16px">
+          <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bybit
+            <span class="card-subtitle">BUY ← giá SELL · SELL ← giá BUY · cache giá mỗi vòng</span>
+          </div>
+          <div class="ap-controls">
+            <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="byScanInterval" class="filter-input" value="30" min="1" step="1"><span class="filter-unit">giây</span></div></div>
+            <button class="btn btn-ghost btn-sm" onclick="App.byApAddRow()">➕ Thêm dòng</button>
+              <label class="filter-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="byOnlineOnly" checked>
+                Chỉ ads online
+              </label>
+            <button class="btn btn-primary btn-sm" id="byStartBtn" onclick="App.startBybitPricer()">▶ Bắt đầu</button>
+            <button class="btn btn-danger btn-sm" id="byStopBtn" style="display:none" onclick="App.stopBybitPricer()">⏹ Dừng</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.saveBybitPricer()">💾 Lưu cấu hình</button>
+            <span class="ap-status-badge stopped" id="byApBadge">⏹ Đã dừng</span>
+          </div>
+          <div class="ap-table-wrap">
+            <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần/Sàn</th><th>Min</th><th>Max</th><th title="BUY: tự refill 20000 mỗi lần cập nhật, hoặc giữ số lượng hiện tại của ad">Số lượng</th><th title="Cộng thêm vào số lượng hiện tại (SELL, hoặc BUY khi chọn Giữ SL)">Refill tay</th><th>Trạng thái</th><th></th></tr></thead>
+              <tbody id="byApTableBody"><tr><td colspan="14" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bybit</label>
+            <div class="ap-log" id="byLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
+          </div>
         </div>
       </div>
-      <div id="bgBuyMarketPanel" class="tab-panel active">
-        <div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th><th>TG xử lý</th></tr></thead>
-        <tbody id="bgBuyMarketBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Nhấn "Tải dữ liệu" để xem</p></div></td></tr></tbody></table></div>
-        <div class="pagination" id="bgBuyMarketPagination"></div>
-      </div>
-      <div id="bgSellMarketPanel" class="tab-panel">
-        <div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th><th>TG xử lý</th></tr></thead>
-        <tbody id="bgSellMarketBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Nhấn "Tải dữ liệu" để xem</p></div></td></tr></tbody></table></div>
-        <div class="pagination" id="bgSellMarketPagination"></div>
-      </div>
-    </div> -->
+    </section>
 
-    <!-- Test cập nhật Ad Bitget (V3) -->
-    <!-- <div style="margin-top:16px">
-      <div class="card-title" style="font-size:12px;margin-bottom:12px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.6"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-        Test cập nhật Ad Bitget
-        <span class="card-subtitle">POST /api/v3/p2p/ad-update</span>
+    <!-- ═══════════════ TAB: BINGX ═══════════════ -->
+    <section class="ex-panel" id="exPanel-bingx" data-ex="bingx">
+      <!-- CARD: BINGX P2P — KẾT NỐI -->
+      <div class="card" id="bingxCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l16 16M20 4L4 20"/></svg>
+          BingX P2P
+          <span class="card-subtitle">open-api.bingx.com · P2P Business OpenAPI</span>
+          <div class="secondary-status-badge"><span class="status-dot" id="bxStatusDot"></span><span id="bxStatusText">Chưa kết nối</span></div>
+        </div>
+        <div id="bxCredentials">
+          <div class="form-grid">
+            <div class="form-group"><label>API KEY (BingX)</label><input type="text" id="bxApiKey" placeholder="Nhập BingX API Key..." autocomplete="off" spellcheck="false"></div>
+            <div class="form-group"><label>SECRET KEY (BingX)</label><div class="input-wrapper"><input type="password" id="bxSecretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('bxSecretKey')" type="button">👁</button></div></div>
+          </div>
+          <div class="host-select-row"><div class="form-group"><label title="Cách gửi params khi sửa ad. Tự động: gửi trên query string, nếu BingX báo lỗi tham số/chữ ký thì tự gửi lại dạng JSON body (timestamp + signature trong body).">KIỂU GỬI POST</label><select id="bxPostMode"><option value="auto">Tự động (khuyên dùng)</option><option value="query">Query string</option><option value="json">JSON body</option><option value="form">Form-urlencoded body</option></select></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="bxConnectBtn" onclick="App.connectBingx()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối BingX</button>
+          <button class="btn btn-danger" id="bxDisconnectBtn" style="display:none" onclick="App.disconnectBingx()">Ngắt kết nối</button>
+          <button class="btn btn-ghost" onclick="App.saveBingxCreds()">💾 Lưu đăng nhập</button>
+          <button class="btn btn-ghost" id="bxDiagBtn" onclick="App.diagnoseBingx()">🩺 Kiểm tra kết nối</button>
+        </div>
+        <div id="bxDiagResult" class="bx-diag" style="display:none"></div>
       </div>
-      <div class="form-grid">
-        <div class="form-group"><label>Ad ID (advId) <span style="color:var(--red)">*</span></label><input type="text" id="bgUpAdvId" placeholder="VD: 1234567890" spellcheck="false"></div>
-        <div class="form-group"><label>Loại giá (priceType)</label><select id="bgUpPriceType"><option value="">— Không gửi —</option><option value="fixed">fixed (Cố định)</option><option value="floating">floating (Thả nổi)</option></select></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Giá (price) — khi priceType=fixed</label><input type="number" id="bgUpPrice" placeholder="VD: 25500" step="0.01" min="0"></div>
-        <div class="form-group"><label>Premium — khi priceType=floating</label><input type="number" id="bgUpPremium" placeholder="VD: 1.02" step="0.01"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Giới hạn tối thiểu (minAmount)</label><input type="number" id="bgUpMinAmount" placeholder="VD: 100000" step="0.01" min="0"></div>
-        <div class="form-group"><label>Giới hạn tối đa (maxAmount)</label><input type="number" id="bgUpMaxAmount" placeholder="VD: 50000000" step="0.01" min="0"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Số lượng (quantity)</label><input type="number" id="bgUpQuantity" placeholder="VD: 500" step="0.0001" min="0"></div>
-        <div class="form-group"><label>TG thanh toán (payTimeLimit, phút) <span style="color:var(--red)">*</span></label><input type="number" id="bgUpPayTimeLimit" placeholder="VD: 15" min="1" step="1"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Payment Method ID (payMethodId)</label><input type="text" id="bgUpPayMethodId" placeholder="VD: 1" spellcheck="false"></div>
-        <div class="form-group"><label>User Payment Method ID — khi side=sell</label><input type="text" id="bgUpUserPayMethodId" placeholder="VD: 123" spellcheck="false"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group" style="grid-column:1/-1"><label>Ghi chú (remark)</label><input type="text" id="bgUpRemark" placeholder="Ad remarks" spellcheck="false"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group" style="grid-column:1/-1"><label>Điều khoản (tradeTerms)</label><input type="text" id="bgUpTradeTerms" placeholder="Trade terms" spellcheck="false"></div>
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-primary" id="bgUpdateBtn" onclick="App.submitBitgetUpdateAd()">Gửi cập nhật</button>
-        <button class="btn btn-ghost" onclick="App.clearBitgetUpdateForm()">Xóa form</button>
-      </div>
-      <div id="bgUpdateResponse" style="display:none;margin-top:14px">
-        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">API Response</label>
-        <pre id="bgUpdateResponseText" style="margin-top:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:240px;overflow-y:auto"></pre>
-      </div>
-    </div> -->
 
-    <!-- CARD: NỘI DUNG QUẢNG CÁO MEXC (Automated Reply & Advertiser Terms) -->
-    <div class="card" id="mexcAdTextCard">
+      <!-- CARD: BINGX — QUẢNG CÁO CỦA TÔI (online + offline) -->
+      <div class="card" id="bxAdsCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          Quảng cáo BingX của tôi
+          <span class="card-subtitle" id="bxAdsCount"></span>
+          <button class="btn btn-ghost btn-sm" onclick="App.loadBingxAds()" style="margin-left:auto">Làm mới</button>
+        </div>
+        <div class="my-ads-filters">
+          <button class="filter-chip bx-chip active" data-filter="ALL" onclick="App.filterBingxAds('ALL')">Tất cả</button>
+          <button class="filter-chip bx-chip" data-filter="ON" onclick="App.filterBingxAds('ON')">🟢 Online</button>
+          <button class="filter-chip bx-chip" data-filter="OFF" onclick="App.filterBingxAds('OFF')">🔴 Offline</button>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Tổng SL</th><th>Giới hạn</th><th>Thanh toán</th><th>TG thanh toán</th></tr></thead>
+          <tbody id="bxAdsBody"><tr class="empty-row"><td colspan="9"><div class="empty-state"><p>Kết nối BingX để xem quảng cáo</p></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CARD: BINGX — AUTO-PRICER -->
+      <div class="card" id="bxPricerCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Tự động chỉnh giá BingX
+          <span class="card-subtitle">MUA theo giá MUA cao nhất · BÁN theo giá BÁN thấp nhất · chỉ sửa khi giá đổi</span>
+        </div>
+        <div class="ap-controls">
+          <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="bxScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
+          <div class="market-filter-group"><label class="filter-label" title="Mỗi trang 100 ads">Số trang market</label><div class="filter-input-unit"><input type="number" id="bxMarketPages" class="filter-input" value="3" min="1" max="10" step="1"><span class="filter-unit">trang</span></div></div>
+          <button class="btn btn-primary btn-sm" id="bxStartBtn" onclick="App.startBingxPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
+          <button class="btn btn-danger btn-sm" id="bxStopBtn" style="display:none" onclick="App.stopBingxPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.saveBingxPricer()">💾 Lưu cấu hình</button>
+          <span class="ap-status-badge stopped" id="bxApBadge">⏹ Đã dừng</span>
+        </div>
+        <div class="ap-table-wrap">
+          <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th title="Số tiền (VND) dùng để lọc ads đối thủ: phải nằm trong giới hạn min–max của ad đối thủ">SL tìm giá</th><th>Offset</th><th title="MUA: giá không vượt quá. BÁN: giá không thấp hơn">Trần / Sàn</th><th title="Bỏ qua đối thủ có số lệnh 30 ngày ít hơn">Lệnh 30d ≥</th><th title="Bỏ trống = giữ nguyên của ad">Min</th><th title="Bỏ trống = giữ nguyên của ad">Max</th><th>Giá hiện tại</th><th>Trạng thái</th></tr></thead>
+          <tbody id="bxApTableBody"><tr><td colspan="10" class="ap-empty">Kết nối BingX để cấu hình</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký BingX</label>
+            <button class="btn btn-ghost btn-sm" onclick="App.clearBingxLog()">Xóa log</button>
+          </div>
+          <div class="ap-log" id="bxLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BẢNG TRẠNG THÁI CÁC SÀN (luôn hiển thị) -->
+    <div class="card" id="exSummaryCard">
       <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.84L3 20l1.4-3.72A7.4 7.4 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-        Nội dung quảng cáo MEXC
-        <span class="card-subtitle" id="mexcAdTextStatus">Nhập Tiếng Việt · tự convert UTF-8 khi gửi lên MEXC</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17v-6m4 6V7m4 10v-3M4 21h16a1 1 0 001-1V4a1 1 0 00-1-1H4a1 1 0 00-1 1v16a1 1 0 001 1z"/></svg>
+        Trạng thái các sàn
+        <span class="card-subtitle">Bấm vào một dòng để mở cấu hình sàn đó</span>
       </div>
-      <div class="adtext-grid">
-        <div class="form-group">
-          <label for="mexcAutoReplyMsg">Automated Reply <span class="adtext-count" id="mexcAutoReplyMsgCount"></span></label>
-          <textarea id="mexcAutoReplyMsg" class="adtext-input" rows="7" placeholder="Tin nhắn tự động gửi cho người mua/bán khi tạo lệnh" oninput="App.mexcAdTextPreview()"></textarea>
-          <details class="adtext-encoded">
-            <summary>Xem dạng UTF-8 (gửi lên API)</summary>
-            <pre id="mexcAutoReplyMsgEncoded"></pre>
-          </details>
-        </div>
-        <div class="form-group">
-          <label for="mexcTradeTerms">Advertiser Terms <span class="adtext-count" id="mexcTradeTermsCount"></span></label>
-          <textarea id="mexcTradeTerms" class="adtext-input" rows="7" placeholder="Điều khoản giao dịch của nhà quảng cáo (để trống = không gửi)" oninput="App.mexcAdTextPreview()"></textarea>
-          <details class="adtext-encoded">
-            <summary>Xem dạng UTF-8 (gửi lên API)</summary>
-            <pre id="mexcTradeTermsEncoded"></pre>
-          </details>
-        </div>
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-primary btn-sm" onclick="App.saveMexcAdText()">💾 Lưu nội dung</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.loadMexcAdText()">↺ Tải lại</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.resetMexcAdText()">Khôi phục mặc định</button>
-      </div>
-      <p class="adtext-hint">Nội dung đã lưu sẽ được dùng mỗi lần auto-pricer cập nhật quảng cáo (save_or_update). Có thể dán cả chuỗi đã encode (%E1%BB%8B…) — hệ thống tự đổi về Tiếng Việt.</p>
-    </div>
-
-    <!-- CARD: TỰ ĐỘNG CHỈNH GIÁ (MEXC) -->
-    <div class="card" id="autoPricerCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        Tự động chỉnh giá
-        <span class="card-subtitle">Tự động cập nhật giá theo thị trường</span>
-      </div>
-      <div class="ap-controls">
-        <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="apScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
-        <button class="btn btn-primary btn-sm" id="apStartBtn" onclick="App.startAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
-        <button class="btn btn-danger btn-sm" id="apStopBtn" style="display:none" onclick="App.stopAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.saveMexcPricer()">💾 Lưu cấu hình</button>
-        <span class="ap-status-badge stopped" id="apStatusBadge">⏹ Đã dừng</span>
-      </div>
-      <div class="ap-table-wrap">
-        <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th>Số lượng GD</th><th>Online ≤ (phút)</th><th>Offset</th><th title="BUY: giá không được vượt quá. SELL: giá không được thấp hơn">Trần / Sàn</th><th title="Refill khi số lượng khả dụng thấp hơn ngưỡng này">Refill khi &lt;</th><th>Refill SL</th><th>Min trans</th><th>Max trans</th><th title="Bỏ qua merchant đối thủ có tổng số GD ít hơn giá trị này">User GD min</th><th title="Bỏ qua merchant đối thủ có tổng số GD nhiều hơn giá trị này">User GD max</th><th title="Bỏ qua ads đối thủ có maxSingleTransAmount lớn hơn giá trị này">Max trans cap</th><th title="Phương thức thanh toán — chỉ áp dụng cho ads SELL (mặc định 1799581)">PayMethod (SELL)</th><th>Trạng thái</th></tr></thead>
-        <tbody id="apTableBody"><tr><td colspan="15" class="ap-empty">Kết nối API chính để cấu hình</td></tr></tbody>
+      <div class="table-wrapper">
+        <table class="ex-summary">
+          <thead><tr><th>Sàn</th><th>Kết nối</th><th>Auto-pricer</th><th>Ads đang bật</th><th>Chu kỳ</th><th>Lần quét cuối</th><th>Đã cập nhật</th><th>Hoạt động gần nhất</th></tr></thead>
+          <tbody id="exSummaryBody"></tbody>
         </table>
       </div>
-      <div style="margin-top:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký hoạt động</label>
-          <button class="btn btn-ghost btn-sm" onclick="App.clearAutoPricerLog()">Xóa log</button>
-        </div>
-        <div class="ap-log" id="apLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
-      </div>
     </div>
 
-    <!-- CARD: TEST CẬP NHẬT GIÁ QUẢNG CÁO -->
-    <!-- <div class="card">
-      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Test cập nhật giá quảng cáo <span class="card-subtitle">POST /api/v3/fiat/merchant/ads/save_or_update</span></div>
-      <div class="form-grid"><div class="form-group"><label>Ads ID (advNo) <span style="color:var(--danger)">*</span></label><input type="text" id="testAdvNo" placeholder="VD: a1375750128856004608" spellcheck="false"></div><div class="form-group"><label>Giá (price) <span style="color:var(--danger)">*</span></label><input type="number" id="testPrice" placeholder="VD: 25500" step="0.01" min="0"></div></div>
-      <div class="form-grid"><div class="form-group"><label>Side</label><select id="testSide"><option value="BUY">BUY (Mua)</option><option value="SELL">SELL (Bán)</option></select></div><div class="form-group"><label>Fiat Unit</label><input type="text" id="testFiatUnit" value="VND" placeholder="VND"></div></div>
-      <div class="form-grid"><div class="form-group"><label>Coin ID</label><input type="text" id="testCoinId" value="128f589271cb4951b03e71e6323eb7be" spellcheck="false"></div><div class="form-group"><label>Thời gian thanh toán (payTimeLimit, phút)</label><input type="number" id="testPayTimeLimit" placeholder="VD: 15" min="1" step="1"></div></div>
-      <div class="form-grid"><div class="form-group"><label>Số lượng ban đầu (initQuantity)</label><input type="number" id="testInitQuantity" placeholder="VD: 100" step="0.0001" min="0"></div><div class="form-group"><label>Payment Method ID (payMethod)</label><input type="text" id="testPayMethod" value="1" placeholder="VD: 1"></div></div>
-      <div class="form-grid"><div class="form-group"><label>Giới hạn tối thiểu (minSingleTransAmount)</label><input type="number" id="testMinAmount" placeholder="VD: 500000" step="0.01" min="0"></div><div class="form-group"><label>Giới hạn tối đa (maxSingleTransAmount)</label><input type="number" id="testMaxAmount" placeholder="VD: 50000000" step="0.01" min="0"></div></div>
-      <div class="form-grid"><div class="form-group"><label>Country Code</label><input type="text" id="testCountryCode" value="VN" placeholder="VN"></div><div class="form-group"><label>KYC Level</label><input type="text" id="testKycLevel" value="PRIMARY" placeholder="PRIMARY"></div></div>
-      <div class="btn-row" style="margin-top:12px"><button class="btn btn-primary" id="testUpdateBtn" onclick="App.submitTestUpdateAd()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg> Gửi request</button><button class="btn btn-ghost" onclick="App.clearTestUpdateForm()">Xóa form</button></div>
-      <div id="testUpdateResponse" style="display:none; margin-top:14px"><label style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em">API Response</label><pre id="testUpdateResponseText" style="margin-top:6px; padding:12px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:240px; overflow-y:auto"></pre></div>
-    </div> -->
-
-    <!-- CARD: P2P MARKET -->
-    <!-- <div class="card">
-      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> Quảng cáo P2P Market</div>
-      <div class="market-filter-bar">
-        <div class="market-filter-group"><label class="filter-label">Online tối đa</label><div class="filter-input-unit"><input type="number" id="filterOnlineMinutes" class="filter-input" placeholder="∞" min="1" step="1"><span class="filter-unit">phút</span></div></div>
-        <div class="market-filter-group"><label class="filter-label">Số lượng giao dịch</label><div class="filter-input-unit"><input type="number" id="filterAmount" class="filter-input" placeholder="—" min="0" step="1"><span class="filter-unit" id="filterAmountUnit">VND</span></div></div>
-        <div class="market-filter-group"><label class="filter-label">Tự động làm mới</label><div class="filter-input-unit"><input type="number" id="filterAutoRefresh" class="filter-input" placeholder="0 = tắt" min="0" step="1"><span class="filter-unit">giây</span></div></div>
-        <button class="btn btn-primary btn-sm" id="applyFilterBtn" onclick="App.updateMarketFilters()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg> Cập nhật</button>
-        <div class="filter-status" id="filterStatus"></div>
-      </div>
-      <div class="tabs-header">
-        <button class="tab-btn active" data-tab="buy" onclick="App.switchTab('buy')">🟢 Mua (BUY)</button>
-        <button class="tab-btn" data-tab="sell" onclick="App.switchTab('sell')">🔴 Bán (SELL)</button>
-        <div class="tabs-actions">
-          <select class="fiat-select" id="fiatFilter" onchange="App.refreshAds()"><option value="VND" selected>VND</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="RUB">RUB</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option><option value="THB">THB</option></select>
-          <button class="btn btn-ghost" onclick="App.refreshAds()" title="Làm mới"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Làm mới</button>
-        </div>
-      </div>
-      <div class="tab-panel active" id="buyPanel"><div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Thời gian</th><th></th></tr></thead><tbody id="buyTableBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><p>Kết nối để xem quảng cáo</p></div></td></tr></tbody></table></div><div class="pagination" id="buyPagination"></div></div>
-      <div class="tab-panel" id="sellPanel"><div class="table-wrapper"><table><thead><tr><th>Merchant</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Thời gian</th><th></th></tr></thead><tbody id="sellTableBody"><tr class="empty-row"><td colspan="7"><div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><p>Kết nối để xem quảng cáo</p></div></td></tr></tbody></table></div><div class="pagination" id="sellPagination"></div></div>
-    </div>
-  </div> -->
-
-  <!-- MODAL: SỬA QUẢNG CÁO -->
-  <!-- <div class="modal-overlay" id="editAdModal">
-    <div class="modal">
-      <div class="modal-header"><h3>✏️ Sửa quảng cáo</h3><button class="modal-close" onclick="App.closeEditModal()">&times;</button></div>
-      <div class="modal-body">
-        <div class="modal-info-row"><span class="modal-label">Mã QC:</span><span class="modal-value mono" id="editAdvNo">—</span></div>
-        <div class="modal-info-row"><span class="modal-label">Loại:</span><span id="editSideBadge">—</span></div>
-        <div class="modal-info-row"><span class="modal-label">Coin:</span><span class="modal-value" id="editCoinName">—</span><input type="hidden" id="editCoinId"></div>
-        <hr class="modal-divider">
-        <div class="modal-form-grid"><div class="form-group"><label>Giá (Price)</label><input type="number" id="editPrice" step="0.01"></div><div class="form-group"><label>Fiat</label><input type="text" id="editFiatUnit" placeholder="VND"></div></div>
-        <div class="modal-form-grid"><div class="form-group"><label>Số lượng ban đầu (initQuantity)</label><input type="number" id="editInitQuantity" step="0.0001"></div><div class="form-group"><label>Thời gian thanh toán (phút)</label><input type="number" id="editPayTimeLimit" step="1"></div></div>
-        <div class="modal-form-grid"><div class="form-group"><label>Giới hạn tối thiểu</label><input type="number" id="editMinAmount" step="0.01"></div><div class="form-group"><label>Giới hạn tối đa</label><input type="number" id="editMaxAmount" step="0.01"></div></div>
-        <div class="form-group" style="margin-top:10px"><label>Trạng thái (advStatus)</label><select id="editAdvStatus"><option value="">— Không thay đổi —</option><option value="OPEN">OPEN (Mở)</option><option value="CLOSE">CLOSE (Đóng)</option></select></div>
-        <div class="form-group" style="margin-top:10px"><label>Payment Method ID</label><input type="text" id="editPayMethod" placeholder="VD: 921"></div>
-        <div class="modal-response" id="editResponse" style="display:none"><label>API Response:</label><pre id="editResponseText"></pre></div>
-      </div>
-      <div class="modal-footer"><button class="btn btn-ghost" onclick="App.closeEditModal()">Hủy</button><button class="btn btn-primary" id="editSubmitBtn" onclick="App.submitEditAd()">💾 Cập nhật</button></div>
-    </div>
-  </div> -->
-
-    <div style="margin-top:16px">
-      <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bybit
-        <span class="card-subtitle">BUY ← giá SELL · SELL ← giá BUY · cache giá mỗi vòng</span>
-      </div>
-      <div class="ap-controls">
-        <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="byScanInterval" class="filter-input" value="30" min="1" step="1"><span class="filter-unit">giây</span></div></div>
-        <button class="btn btn-ghost btn-sm" onclick="App.byApAddRow()">➕ Thêm dòng</button>
-          <label class="filter-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input type="checkbox" id="byOnlineOnly" checked>
-            Chỉ ads online
-          </label>
-        <button class="btn btn-primary btn-sm" id="byStartBtn" onclick="App.startBybitPricer()">▶ Bắt đầu</button>
-        <button class="btn btn-danger btn-sm" id="byStopBtn" style="display:none" onclick="App.stopBybitPricer()">⏹ Dừng</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.saveBybitPricer()">💾 Lưu cấu hình</button>
-        <span class="ap-status-badge stopped" id="byApBadge">⏹ Đã dừng</span>
-      </div>
-      <div class="ap-table-wrap">
-        <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần/Sàn</th><th>Min</th><th>Max</th><th title="BUY: tự refill 20000 mỗi lần cập nhật, hoặc giữ số lượng hiện tại của ad">Số lượng</th><th title="Cộng thêm vào số lượng hiện tại (SELL, hoặc BUY khi chọn Giữ SL)">Refill tay</th><th>Trạng thái</th><th></th></tr></thead>
-          <tbody id="byApTableBody"><tr><td colspan="14" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
-        </table>
-      </div>
-      <div style="margin-top:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bybit</label>
-        <div class="ap-log" id="byLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
-      </div>
-    </div>
-
-    <!-- <div style="margin-top:16px">
-      <div class="card-title" style="font-size:12px;margin-bottom:12px">Test lấy Ads thị trường
-        <span class="card-subtitle">POST /v5/p2p/item/online</span>
-      </div>
-      <div class="form-grid">
-        <div class="form-group"><label>Token</label><input type="text" id="byMktToken" value="USDT" spellcheck="false"></div>
-        <div class="form-group"><label>Fiat</label><input type="text" id="byMktCurrency" value="EUR" spellcheck="false"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Side</label><select id="byMktSide"><option value="0">0 — Buy</option><option value="1">1 — Sell</option></select></div>
-        <div class="form-group"><label>Số dòng (size)</label><input type="number" id="byMktSize" value="10" min="1" max="300"></div>
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-primary" id="byMktBtn" onclick="App.testBybitMarket()">Lấy ads</button>
-      </div>
-      <div id="byMktResponse" style="display:none;margin-top:14px">
-        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Response</label>
-        <pre id="byMktResponseText" style="margin-top:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto"></pre>
-      </div>
-    </div>
-
-    <div style="margin-top:16px">
-      <div class="card-title" style="font-size:12px;margin-bottom:12px">Test cập nhật Ad
-        <span class="card-subtitle">POST /v5/p2p/item/update</span>
-      </div>
-      <div class="form-grid">
-        <div class="form-group"><label>Ad ID (id) <span style="color:var(--red)">*</span></label><input type="text" id="byUpId" placeholder="VD: 1898988222063644672" spellcheck="false"></div>
-        <div class="form-group"><label style="opacity:0">.</label><button class="btn btn-ghost" style="width:100%" onclick="App.loadBybitAdIntoForm()">⬇ Nạp ad hiện tại</button></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>priceType</label><select id="byUpPriceType"><option value="0">0 — Cố định</option><option value="1">1 — Thả nổi</option></select></div>
-        <div class="form-group"><label>actionType <span style="color:var(--red)">*</span></label><select id="byUpActionType"><option value="MODIFY">MODIFY — Sửa</option><option value="ACTIVE">ACTIVE — Đăng lại</option></select></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Giá (price)</label><input type="number" id="byUpPrice" step="0.0001"></div>
-        <div class="form-group"><label>Premium (khi priceType=1)</label><input type="text" id="byUpPremium" placeholder="VD: 130"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Số lượng (quantity)</label><input type="number" id="byUpQuantity"></div>
-        <div class="form-group"><label>Payment Period (phút)</label><input type="number" id="byUpPayPeriod" value="15"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Min Amount</label><input type="number" id="byUpMin"></div>
-        <div class="form-group"><label>Max Amount</label><input type="number" id="byUpMax"></div>
-      </div>
-      <div class="form-grid" style="margin-top:10px">
-        <div class="form-group"><label>Payment IDs (cách nhau dấu phẩy)</label><input type="text" id="byUpPaymentIds" placeholder="VD: 377  (lấy từ Get User Payment)"></div>
-        <div class="form-group"><label>Remark</label><input type="text" id="byUpRemark" placeholder="Mô tả ad"></div>
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-ghost btn-sm" onclick="App.loadBybitPayments()">Xem Payment IDs của tôi</button>
-        <button class="btn btn-primary" id="byUpBtn" onclick="App.submitBybitUpdate()">Gửi cập nhật</button>
-      </div>
-      <div id="byUpResponse" style="display:none;margin-top:14px">
-        <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Response</label>
-        <pre id="byUpResponseText" style="margin-top:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto"></pre>
-      </div>
-    </div> -->
+  </div>
 
   <div class="toast-container" id="toastContainer"></div>
   <script src="/js/app.js"></script>

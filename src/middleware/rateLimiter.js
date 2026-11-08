@@ -12,7 +12,15 @@ const requestCounts = new Map();
  * Nếu vượt quá giới hạn, trả về HTTP 429 (Too Many Requests).
  * Hoạt động: đếm số request từ cùng 1 IP trong cửa sổ 1 giây.
  */
+// Chỉ giới hạn các request đi tới MEXC. Các sàn khác (Bitget/Bybit/BingX) có giới hạn riêng,
+// còn file tĩnh và các API nội bộ (settings, status, whitelist...) không gọi ra ngoài.
+const SKIP_PREFIXES = ['/api/bitget', '/api/bybit', '/api/bingx', '/api/settings', '/api/status',
+  '/api/config', '/api/whitelist', '/api/binance', '/api/mexc/ad-text'];
+const MEXC_PREFIXES = ['/api/'];
+
 function rateLimiter(req, res, next) {
+  const url = req.originalUrl || req.url || '';
+  if (!MEXC_PREFIXES.some(p => url.startsWith(p)) || SKIP_PREFIXES.some(p => url.startsWith(p))) return next();
   const now = Date.now();
   const windowMs = 1000; // Cửa sổ thời gian: 1 giây
   const key = req.ip;
