@@ -15,7 +15,7 @@ const logger = require('../utils/logger');
  * Endpoint dùng:
  *   3.1  GET  /openApi/p2p/v1/advert/list           — ads trên market (không cần ký)
  *   3.8  POST /openApi/p2p/v1/merchant/advert/modify — sửa ad (đổi giá)
- *   3.10 GET  /openApi/P2P/v1/merchant/myAdvert      — ads của tôi (Listed + Delisted)
+ *   3.10 GET  /openApi/p2p/v1/merchant/myAdvert      — ads của tôi (Listed + Delisted)
  *
  * Lưu ý: advertNo là số 19 chữ số (> Number.MAX_SAFE_INTEGER) → phải parse JSON
  * dạng chuỗi, nếu không ID bị sai và sửa nhầm/không sửa được ad.
@@ -24,8 +24,9 @@ const logger = require('../utils/logger');
 // Tài liệu ghi 2 đường dẫn khác nhau giữa bản EN/CN → thử lần lượt, nhớ đường dẫn chạy được
 const PATHS = {
   market: ['/openApi/p2p/v1/advert/list', '/openApi/p2p/v1/ads/list'],
-  myAds: ['/openApi/P2P/v1/merchant/myAdvert', '/openApi/p2p/v1/merchant/myAdvert'],
-  modify: ['/openApi/p2p/v1/merchant/advert/modify', '/openApi/P2P/v1/merchant/advert/modify'],
+  // Đường dẫn phân biệt hoa/thường: phải là "p2p" chữ thường ("P2P" chữ hoa gây lỗi)
+  myAds: ['/openApi/p2p/v1/merchant/myAdvert'],
+  modify: ['/openApi/p2p/v1/merchant/advert/modify'],
 };
 
 // Bọc số nguyên ≥ 16 chữ số thành chuỗi trước khi JSON.parse (giữ đúng advertNo)

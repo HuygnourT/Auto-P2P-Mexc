@@ -116,3 +116,9 @@ Trần/Sàn: ô `priceLimit` cũ giữ nguyên (Trần cho ad MUA, Sàn cho ad B
 4 trạng thái khác nhau: **Kết nối API** (sàn) · **Online/Offline** (quảng cáo trên sàn) · **Auto Pricing Running/Stopped** (engine của sàn) · **Auto Repricing Bật/Tắt** (từng quảng cáo).
 
 API mới: `GET /api/market/filters`, `POST /api/market/filters/:ex` (`{ minQty }`).
+
+### Giá tốt nhất — bộ lọc Limit Min (VND)
+- Telegram → 🏆 Giá tốt nhất → chọn sàn → ✏️ Sửa Limit Min: Tất cả · 100,000 · 500,000 · 1,000,000 · 5,000,000 · Tuỳ chỉnh (gõ `2,000,000`, `1.500.000`, `2tr`, `500k`).
+- Điều kiện: chỉ giữ quảng cáo có **Limit Min ≤ số tiền đã chọn ≤ Limit Max** (giao dịch được với số tiền đó). Áp dụng cho cả Best BUY và Best SELL, lưu riêng từng sàn trong `data/settings.json` → `bestPriceFilters`.
+- Không thay đổi Min/Max quảng cáo trên sàn, không ảnh hưởng auto-pricer. Bộ lọc SL khả dụng (USDT) chỉ còn dùng cho Market P2P.
+- API: `GET /api/market/best-filters`, `POST /api/market/best-filters/:ex {limitMin}`, `GET /api/market/best?limitMin=saved|<số>`.

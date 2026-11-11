@@ -126,7 +126,7 @@ function requireSecondaryConnection(_req, res, next) {
 // ══════════════════════════════════════════════════════
 
 // Các mục do engine quản lý (đọc/ghi qua /api/engine/...) và Telegram (qua /api/telegram/...)
-const PROTECTED_SECTIONS = ['mexcPricer', 'bitgetPricer', 'bybitPricer', 'bingxPricer', 'telegram', 'marketFilters'];
+const PROTECTED_SECTIONS = ['mexcPricer', 'bitgetPricer', 'bybitPricer', 'bingxPricer', 'telegram', 'marketFilters', 'bestPriceFilters'];
 
 function publicSettings() {
   const s = settings.getSettings();
