@@ -149,25 +149,8 @@ class BingxP2P {
     if (this.apiKey) headers['X-BX-APIKEY'] = this.apiKey;
     if (req.contentType) headers['Content-Type'] = req.contentType;
 
-    // ===== LOG KIỂM TRA REQUEST BINGX =====
-    const maskKey = k => (k ? `${k.slice(0, 6)}...${k.slice(-4)}` : '(trống)');
-    console.log('\n========== [BingX REQUEST] ==========');
-    console.log('Method      :', method, `(kiểu gửi: ${mode})`);
-    console.log('Full URL    :', this.baseUrl + req.pathAndQuery);
-    console.log('API Key     :', maskKey(this.apiKey));
-    console.log('Headers     :', JSON.stringify({ ...headers, 'X-BX-APIKEY': maskKey(headers['X-BX-APIKEY']) }));
-    console.log('Chuỗi ký    :', req.signingString);
-    if (req.data !== undefined) console.log('Body        :', typeof req.data === 'string' ? req.data : JSON.stringify(req.data));
-    // ======================================
-
     logger.debug(`[BingX] ${method} ${path} (${mode}) sign="${req.signingString}"`);
     const res = await this._http({ method, pathAndQuery: req.pathAndQuery, data: req.data, headers });
-
-    // ===== LOG KIỂM TRA RESPONSE BINGX =====
-    console.log('HTTP status :', res.status);
-    console.log('Response    :', String(res.data).slice(0, 1000));
-    console.log('=====================================\n');
-    // =======================================
 
     let body;
     try {

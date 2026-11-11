@@ -10,6 +10,7 @@ const settings = require('../services/settings');   // ★ thêm cạnh các req
 const bybitService = require('../services/bybitP2P');
 const bingxService = require('../services/bingxP2P');
 const { encodeMexcText, decodeMexcText, DEFAULT_AUTO_REPLY, DEFAULT_TRADE_TERMS } = require('../utils/mexcText');
+const registry = require('../core/registry');   // ★ kết nối dùng chung cho engine + Telegram
 
 
 /**
@@ -36,6 +37,7 @@ router.post('/connect', async (req, res) => {
     const connected = await service.testConnection();
     if (connected) {
       activeService = service;
+      registry.set('mexcPrimary', service);
       logger.info(`[Primary] Connected to MEXC P2P via ${host}`);
       return res.json({ code: 0, msg: 'Connected successfully', data: { host } });
     } else {
@@ -49,6 +51,7 @@ router.post('/connect', async (req, res) => {
 
 router.post('/disconnect', (_req, res) => {
   activeService = null;
+  registry.set('mexcPrimary', null);
   logger.info('[Primary] Disconnected from MEXC P2P');
   res.json({ code: 0, msg: 'Disconnected' });
 });
@@ -81,6 +84,7 @@ router.post('/connect/secondary', async (req, res) => {
     const connected = await service.testConnection();
     if (connected) {
       secondaryService = service;
+      registry.set('mexcSecondary', service);
       logger.info(`[Secondary] Connected to MEXC P2P via ${host}`);
       return res.json({ code: 0, msg: 'Secondary connected successfully', data: { host } });
     } else {
@@ -94,6 +98,7 @@ router.post('/connect/secondary', async (req, res) => {
 
 router.post('/disconnect/secondary', (_req, res) => {
   secondaryService = null;
+  registry.set('mexcSecondary', null);
   logger.info('[Secondary] Disconnected from MEXC P2P');
   res.json({ code: 0, msg: 'Secondary disconnected' });
 });
@@ -120,14 +125,30 @@ function requireSecondaryConnection(_req, res, next) {
 // SETTINGS — Lưu cấu hình & thông tin đăng nhập
 // ══════════════════════════════════════════════════════
 
+// Các mục do engine quản lý (đọc/ghi qua /api/engine/...) và Telegram (qua /api/telegram/...)
+const PROTECTED_SECTIONS = ['mexcPricer', 'bitgetPricer', 'bybitPricer', 'bingxPricer', 'telegram', 'marketFilters'];
+
+function publicSettings() {
+  const s = settings.getSettings();
+  // KHÔNG bao giờ gửi Bot Token ra trình duyệt
+  if (s.telegram) {
+    const { botToken, ...rest } = s.telegram;
+    s.telegram = { ...rest, hasToken: !!botToken };
+  }
+  return s;
+}
+
 router.get('/settings', (_req, res) => {
-  res.json({ code: 0, data: settings.getSettings() });
+  res.json({ code: 0, data: publicSettings() });
 });
 
 router.post('/settings/:section', (req, res) => {
+  if (PROTECTED_SECTIONS.includes(req.params.section)) {
+    return res.status(400).json({ code: -1, msg: `Mục "${req.params.section}" được quản lý bởi engine/Telegram — dùng API riêng` });
+  }
   try {
-    const updated = settings.saveSection(req.params.section, req.body || {});
-    res.json({ code: 0, data: updated });
+    settings.saveSection(req.params.section, req.body || {});
+    res.json({ code: 0, data: publicSettings() });
   } catch (err) {
     res.status(400).json({ code: -1, msg: err.message });
   }
@@ -231,6 +252,7 @@ router.post('/bitget/connect', async (req, res) => {
     const connected = await service.testConnection();
     if (connected) {
       bitgetService = service;
+      registry.set('bitget', service);
       logger.info('[Bitget] Connected');
       return res.json({ code: 0, msg: 'Bitget connected' });
     } else {
@@ -244,6 +266,7 @@ router.post('/bitget/connect', async (req, res) => {
 
 router.post('/bitget/disconnect', (_req, res) => {
   bitgetService = null;
+  registry.set('bitget', null);
   logger.info('[Bitget] Disconnected');
   res.json({ code: 0, msg: 'Bitget disconnected' });
 });
@@ -409,6 +432,7 @@ router.post('/bybit/connect', async (req, res) => {
       bybitService.disconnect();
       return res.json({ code: -1, msg: check.ret_msg || 'Xác thực thất bại' });
     }
+    require('../core/bus').emit('connection', { key: 'bybit', connected: true });
     res.json({ code: 0, msg: 'connected', data: check.result });
   } catch (err) {
     bybitService.disconnect();
@@ -418,6 +442,7 @@ router.post('/bybit/connect', async (req, res) => {
 
 router.post('/bybit/disconnect', (_req, res) => {
   bybitService.disconnect();
+  require('../core/bus').emit('connection', { key: 'bybit', connected: false });
   res.json({ code: 0, msg: 'disconnected' });
 });
 
@@ -481,6 +506,7 @@ router.post('/bingx/connect', async (req, res) => {
       return res.json({ code: check.code || -1, msg: `${check.msg || 'Kết nối BingX thất bại'}${hint ? ' — ' + hint : ''}` });
     }
     logger.info(`[BingX] Connected — ${check.data.total} ads`);
+    require('../core/bus').emit('connection', { key: 'bingx', connected: true });
     res.json({ code: 0, data: check.data });
   } catch (err) {
     bingxService.disconnect();
@@ -502,6 +528,7 @@ router.post('/bingx/diagnose', async (req, res) => {
 
 router.post('/bingx/disconnect', (_req, res) => {
   bingxService.disconnect();
+  require('../core/bus').emit('connection', { key: 'bingx', connected: false });
   res.json({ code: 0 });
 });
 

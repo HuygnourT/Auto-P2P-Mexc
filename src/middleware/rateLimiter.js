@@ -15,7 +15,9 @@ const requestCounts = new Map();
 // Chỉ giới hạn các request đi tới MEXC. Các sàn khác (Bitget/Bybit/BingX) có giới hạn riêng,
 // còn file tĩnh và các API nội bộ (settings, status, whitelist...) không gọi ra ngoài.
 const SKIP_PREFIXES = ['/api/bitget', '/api/bybit', '/api/bingx', '/api/settings', '/api/status',
-  '/api/config', '/api/whitelist', '/api/binance', '/api/mexc/ad-text'];
+  '/api/config', '/api/whitelist', '/api/binance', '/api/mexc/ad-text',
+  // engine chạy trong server và tự giãn cách request tới sàn; SSE là kết nối dài
+  '/api/engine', '/api/events', '/api/telegram', '/api/market/best', '/api/market/list', '/api/audit'];
 const MEXC_PREFIXES = ['/api/'];
 
 function rateLimiter(req, res, next) {

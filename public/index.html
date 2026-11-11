@@ -31,7 +31,7 @@
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l3-3 4 4 5-6"/></svg>
         Giá thị trường P2P
-        <span class="card-subtitle">USDT/VND · MUA cao nhất · BÁN thấp nhất</span>
+        <span class="card-subtitle">USDT/VND · MUA = giá cao nhất của ads MUA · BÁN = giá thấp nhất của ads BÁN · dùng chung dữ liệu với engine</span>
         <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
           <div class="filter-input-unit">
             <input type="number" id="pbAmount" class="filter-input" value="20000000" min="0" step="100000" onchange="App.refreshPriceBoard()">
@@ -42,27 +42,31 @@
       </div>
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>Sàn</th><th>MUA (cao nhất)</th><th>BÁN (thấp nhất)</th></tr></thead>
+          <thead><tr><th>Sàn</th><th>MUA (cao nhất)</th><th>BÁN (thấp nhất)</th><th>Cập nhật</th></tr></thead>
           <tbody>
             <tr>
               <td><strong>MEXC</strong></td>
               <td id="pbMexcBuy" class="mono-cell price-value price-buy">—</td>
               <td id="pbMexcSell" class="mono-cell price-value price-sell">—</td>
+              <td id="pbMexcAt" class="mono-cell text-muted pb-at">—</td>
             </tr>
             <tr>
               <td><strong>Bitget</strong></td>
               <td id="pbBitgetBuy" class="mono-cell price-value price-buy">—</td>
               <td id="pbBitgetSell" class="mono-cell price-value price-sell">—</td>
+              <td id="pbBitgetAt" class="mono-cell text-muted pb-at">—</td>
             </tr>
             <tr>
               <td><strong>Bybit</strong></td>
               <td id="pbBybitBuy" class="mono-cell price-value price-buy">—</td>
               <td id="pbBybitSell" class="mono-cell price-value price-sell">—</td>
+              <td id="pbBybitAt" class="mono-cell text-muted pb-at">—</td>
             </tr>
             <tr>
               <td><strong>BingX</strong></td>
               <td id="pbBingxBuy" class="mono-cell price-value price-buy">—</td>
               <td id="pbBingxSell" class="mono-cell price-value price-sell">—</td>
+              <td id="pbBingxAt" class="mono-cell text-muted pb-at">—</td>
             </tr>
           </tbody>
         </table>
@@ -75,49 +79,43 @@
       <button class="ex-tab" data-ex="bitget" role="tab" onclick="App.switchExchange('bitget')"><span class="ex-dot" id="exDot-bitget"></span>Bitget<span class="ex-run" id="exRun-bitget"></span></button>
       <button class="ex-tab" data-ex="bybit" role="tab" onclick="App.switchExchange('bybit')"><span class="ex-dot" id="exDot-bybit"></span>Bybit<span class="ex-run" id="exRun-bybit"></span></button>
       <button class="ex-tab" data-ex="bingx" role="tab" onclick="App.switchExchange('bingx')"><span class="ex-dot" id="exDot-bingx"></span>BingX<span class="ex-run" id="exRun-bingx"></span></button>
+      <button class="ex-tab" data-ex="telegram" role="tab" onclick="App.switchExchange('telegram')"><span class="ex-dot" id="exDot-telegram"></span>Telegram</button>
     </nav>
 
     <!-- ═══════════════ TAB: MEXC ═══════════════ -->
     <section class="ex-panel active" id="exPanel-mexc" data-ex="mexc">
-      <div class="card">
+      <!-- 1. TRẠNG THÁI SÀN & GIÁ THỊ TRƯỜNG -->
+      <div class="ex-strip" id="exStrip-mexc"><div class="ex-strip-loading">Đang tải trạng thái...</div></div>
+
+      <!-- 2. AUTO PRICING -->
+      <div class="card" id="autoPricerCard">
         <div class="card-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-          Kết nối API chính (MEXC)
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Tự động chỉnh giá
+          <span class="card-subtitle">Tự động cập nhật giá theo thị trường</span>
         </div>
-        <div id="credentialInputs">
-          <div class="form-grid">
-            <div class="form-group"><label>API KEY</label><div class="input-wrapper"><input type="text" id="apiKey" placeholder="Nhập API Key..." autocomplete="off" spellcheck="false"></div></div>
-            <div class="form-group"><label>SECRET KEY</label><div class="input-wrapper"><input type="password" id="secretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey')" type="button">👁</button></div></div>
+        <div class="ap-controls">
+          <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="apScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
+          <button class="btn btn-primary btn-sm" id="apStartBtn" onclick="App.startAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
+          <button class="btn btn-danger btn-sm" id="apStopBtn" style="display:none" onclick="App.stopAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.saveMexcPricer()">💾 Đã tự lưu</button>
+          <span class="ap-status-badge stopped" id="apStatusBadge">⏹ Đã dừng</span>
+        </div>
+        <div class="ap-table-wrap">
+          <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th>Số lượng GD</th><th>Online ≤ (phút)</th><th>Offset</th><th title="BUY: giá không được vượt quá. SELL: giá không được thấp hơn">Trần (MUA) / Sàn (BÁN)</th><th title="Cận thứ 2 (mới): MUA = Sàn (giá không thấp hơn), BÁN = Trần (giá không cao hơn). Để trống = không giới hạn">Sàn (MUA) / Trần (BÁN)</th><th title="Refill khi số lượng khả dụng thấp hơn ngưỡng này">Refill khi &lt;</th><th>Refill SL</th><th>Min trans</th><th>Max trans</th><th title="Bỏ qua merchant đối thủ có tổng số GD ít hơn giá trị này">User GD min</th><th title="Bỏ qua merchant đối thủ có tổng số GD nhiều hơn giá trị này">User GD max</th><th title="Bỏ qua ads đối thủ có maxSingleTransAmount lớn hơn giá trị này">Max trans cap</th><th title="Phương thức thanh toán — chỉ áp dụng cho ads SELL (mặc định 1799581)">PayMethod (SELL)</th><th>Trạng thái</th></tr></thead>
+          <tbody id="apTableBody"><tr><td colspan="16" class="ap-empty">Kết nối API chính để cấu hình</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký hoạt động</label>
+            <button class="btn btn-ghost btn-sm" onclick="App.clearAutoPricerLog()">Xóa log</button>
           </div>
-          <div class="host-select-row"><div class="form-group"><label>API HOST</label><select id="apiHost"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="connectBtn" onclick="App.connect()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối</button>
-          <button class="btn btn-danger" id="disconnectBtn" style="display:none" onclick="App.disconnect()">Ngắt kết nối</button>
-          <button class="btn btn-ghost" onclick="App.saveMexcCreds()">💾 Lưu đăng nhập</button>
+          <div class="ap-log" id="apLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-          Kết nối API phụ
-          <span class="card-subtitle">Dùng để lấy dữ liệu P2P Market</span>
-          <div class="secondary-status-badge" id="secondaryStatusBadge"><span class="status-dot" id="secondaryStatusDot"></span><span id="secondaryStatusText">Chưa kết nối</span></div>
-        </div>
-        <div id="secondaryCredentialInputs">
-          <div class="form-grid">
-            <div class="form-group"><label>API KEY (phụ)</label><div class="input-wrapper"><input type="text" id="apiKey2" placeholder="Nhập API Key phụ..." autocomplete="off" spellcheck="false"></div></div>
-            <div class="form-group"><label>SECRET KEY (phụ)</label><div class="input-wrapper"><input type="password" id="secretKey2" placeholder="Nhập Secret Key phụ..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey2')" type="button">👁</button></div></div>
-          </div>
-          <div class="host-select-row"><div class="form-group"><label>API HOST (phụ)</label><select id="apiHost2"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="connectBtn2" onclick="App.connectSecondary()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối phụ</button>
-          <button class="btn btn-danger" id="disconnectBtn2" style="display:none" onclick="App.disconnectSecondary()">Ngắt kết nối phụ</button>
-        </div>
-      </div>
-
+      <!-- 3. QUẢNG CÁO CỦA TÔI -->
       <div class="card" id="myAdsCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -136,6 +134,31 @@
         </div>
         <div class="pagination" id="myAdsPagination"></div>
       </div>
+
+      <!-- 4. ADS ĐỐI THỦ / MARKET -->
+      <div class="card mk-card" id="mkCard-mexc">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Market — ads đối thủ
+          <span class="card-subtitle">Cùng dữ liệu & quy tắc xếp hạng với engine · đã bỏ ads của bạn + whitelist</span>
+        </div>
+        <div class="ap-controls">
+          <div class="mk-side-toggle">
+            <button class="filter-chip mk-chip active" data-side="BUY" onclick="App.mkSetSide('mexc','BUY')">🟢 Ads MUA</button>
+            <button class="filter-chip mk-chip" data-side="SELL" onclick="App.mkSetSide('mexc','SELL')">🔴 Ads BÁN</button>
+          </div>
+          <div class="market-filter-group"><label class="filter-label" title="Số lượng khả dụng tối thiểu của ad đối thủ (USDT) — riêng từng sàn, dùng chung với Telegram (Giá tốt nhất / Market). Khác với 'Số lượng GD' của auto-pricer.">SL khả dụng ≥ <span class="ex-sub">(chung Telegram)</span></label><div class="filter-input-unit"><input type="number" id="mkMinQty-mexc" class="filter-input" value="0" min="0" step="100" onchange="App.mkSetMinQty('mexc')"><span class="filter-unit">USDT</span></div></div>
+          <button class="btn btn-ghost btn-sm" onclick="App.mkLoad('mexc', true)">🔄 Làm mới</button>
+          <span class="card-subtitle" id="mkInfo-mexc"></span>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr><th>#</th><th>Thương nhân</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th></tr></thead>
+          <tbody id="mkBody-mexc"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Mở tab để tải dữ liệu market</p></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ex-section-label">Chức năng khác</div>
 
       <div class="card" id="whitelistCard">
         <div class="card-title">
@@ -185,41 +208,118 @@
         <p class="adtext-hint">Nội dung đã lưu sẽ được dùng mỗi lần auto-pricer cập nhật quảng cáo (save_or_update). Có thể dán cả chuỗi đã encode (%E1%BB%8B…) — hệ thống tự đổi về Tiếng Việt.</p>
       </div>
 
-      <div class="card" id="autoPricerCard">
+      <div class="card" id="mexcConnectCard">
         <div class="card-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          Tự động chỉnh giá
-          <span class="card-subtitle">Tự động cập nhật giá theo thị trường</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          Kết nối API chính (MEXC)
         </div>
-        <div class="ap-controls">
-          <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="apScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
-          <button class="btn btn-primary btn-sm" id="apStartBtn" onclick="App.startAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
-          <button class="btn btn-danger btn-sm" id="apStopBtn" style="display:none" onclick="App.stopAutoPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.saveMexcPricer()">💾 Lưu cấu hình</button>
-          <span class="ap-status-badge stopped" id="apStatusBadge">⏹ Đã dừng</span>
-        </div>
-        <div class="ap-table-wrap">
-          <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th>Số lượng GD</th><th>Online ≤ (phút)</th><th>Offset</th><th title="BUY: giá không được vượt quá. SELL: giá không được thấp hơn">Trần / Sàn</th><th title="Refill khi số lượng khả dụng thấp hơn ngưỡng này">Refill khi &lt;</th><th>Refill SL</th><th>Min trans</th><th>Max trans</th><th title="Bỏ qua merchant đối thủ có tổng số GD ít hơn giá trị này">User GD min</th><th title="Bỏ qua merchant đối thủ có tổng số GD nhiều hơn giá trị này">User GD max</th><th title="Bỏ qua ads đối thủ có maxSingleTransAmount lớn hơn giá trị này">Max trans cap</th><th title="Phương thức thanh toán — chỉ áp dụng cho ads SELL (mặc định 1799581)">PayMethod (SELL)</th><th>Trạng thái</th></tr></thead>
-          <tbody id="apTableBody"><tr><td colspan="15" class="ap-empty">Kết nối API chính để cấu hình</td></tr></tbody>
-          </table>
-        </div>
-        <div style="margin-top:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký hoạt động</label>
-            <button class="btn btn-ghost btn-sm" onclick="App.clearAutoPricerLog()">Xóa log</button>
+        <div id="credentialInputs">
+          <div class="form-grid">
+            <div class="form-group"><label>API KEY</label><div class="input-wrapper"><input type="text" id="apiKey" placeholder="Nhập API Key..." autocomplete="off" spellcheck="false"></div></div>
+            <div class="form-group"><label>SECRET KEY</label><div class="input-wrapper"><input type="password" id="secretKey" placeholder="Nhập Secret Key..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey')" type="button">👁</button></div></div>
           </div>
-          <div class="ap-log" id="apLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
+          <div class="host-select-row"><div class="form-group"><label>API HOST</label><select id="apiHost"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="connectBtn" onclick="App.connect()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối</button>
+          <button class="btn btn-danger" id="disconnectBtn" style="display:none" onclick="App.disconnect()">Ngắt kết nối</button>
+          <button class="btn btn-ghost" onclick="App.saveMexcCreds()">💾 Lưu đăng nhập</button>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          Kết nối API phụ
+          <span class="card-subtitle">Dùng để lấy dữ liệu P2P Market</span>
+          <div class="secondary-status-badge" id="secondaryStatusBadge"><span class="status-dot" id="secondaryStatusDot"></span><span id="secondaryStatusText">Chưa kết nối</span></div>
+        </div>
+        <div id="secondaryCredentialInputs">
+          <div class="form-grid">
+            <div class="form-group"><label>API KEY (phụ)</label><div class="input-wrapper"><input type="text" id="apiKey2" placeholder="Nhập API Key phụ..." autocomplete="off" spellcheck="false"></div></div>
+            <div class="form-group"><label>SECRET KEY (phụ)</label><div class="input-wrapper"><input type="password" id="secretKey2" placeholder="Nhập Secret Key phụ..." autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('secretKey2')" type="button">👁</button></div></div>
+          </div>
+          <div class="host-select-row"><div class="form-group"><label>API HOST (phụ)</label><select id="apiHost2"><option value="api.mexc.com">Global (api.mexc.com)</option><option value="api.mexc.co">Alternative (api.mexc.co)</option></select></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="connectBtn2" onclick="App.connectSecondary()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Kết nối phụ</button>
+          <button class="btn btn-danger" id="disconnectBtn2" style="display:none" onclick="App.disconnectSecondary()">Ngắt kết nối phụ</button>
+        </div>
+      </div>
+
     </section>
 
     <!-- ═══════════════ TAB: BITGET ═══════════════ -->
     <section class="ex-panel" id="exPanel-bitget" data-ex="bitget">
+      <!-- 1. TRẠNG THÁI SÀN & GIÁ THỊ TRƯỜNG -->
+      <div class="ex-strip" id="exStrip-bitget"><div class="ex-strip-loading">Đang tải trạng thái...</div></div>
+
+      <!-- 2. AUTO PRICING -->
+      <div class="card" id="bgPricerCard">
+        <div class="card-title">Tự động chỉnh giá Bitget <span class="card-subtitle">Ad MUA theo giá cao nhất của ads MUA · Ad BÁN theo giá thấp nhất của ads BÁN</span></div>
+
+          <div class="ap-controls">
+            <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="bgScanInterval" class="filter-input" value="1" min="1" step="1"><span class="filter-unit">giây</span></div></div>
+            <div class="market-filter-group"><label class="filter-label">Offset BUY</label><div class="filter-input-unit"><input type="number" id="bgOffsetBuy" class="filter-input" value="-50"><span class="filter-unit">VND</span></div></div>
+            <div class="market-filter-group"><label class="filter-label">Offset SELL</label><div class="filter-input-unit"><input type="number" id="bgOffsetSell" class="filter-input" value="50"><span class="filter-unit">VND</span></div></div>
+            <button class="btn btn-ghost btn-sm" onclick="App.bgApAddRow()">➕ Thêm dòng</button>
+            <button class="btn btn-primary btn-sm" id="bgStartBtn" onclick="App.startBitgetPricer()">▶ Bắt đầu</button>
+            <button class="btn btn-danger btn-sm" id="bgStopBtn" style="display:none" onclick="App.stopBitgetPricer()">⏹ Dừng</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.saveBitgetPricer()">💾 Đã tự lưu</button>
+            <span class="ap-status-badge stopped" id="bgApBadge">⏹ Đã dừng</span>
+          </div>
+          <div class="ap-table-wrap">
+            <table class="ap-table"><thead><tr><th>Loại</th><th>advId</th><th>Bật</th><th>SL tìm giá</th><th>Offset</th><th>Trần (MUA) / Sàn (BÁN)</th><th title="Cận thứ 2 (mới): MUA = Sàn (giá không thấp hơn), BÁN = Trần (giá không cao hơn). Để trống = không giới hạn">Sàn (MUA) / Trần (BÁN)</th><th>Min</th><th>Max</th><th>Số lượng</th><th>Refill khi &lt;</th><th>Refill SL</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody id="bgApTableBody"><tr><td colspan="14" class="ap-empty">Chưa có dòng nào. Bấm "➕ Thêm dòng" để cấu hình.</td></tr></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bitget</label>
+            <div class="ap-log" id="bgLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
+          </div>
+      </div>
+
+      <!-- 3. QUẢNG CÁO CỦA TÔI -->
+      <div class="card" id="bgAdsCard">
+        <div class="card-title">Quảng cáo Bitget của tôi <button class="btn btn-ghost btn-sm" onclick="App.loadBitgetAds()" style="margin-left:auto">Làm mới</button></div>
+
+          <div class="table-wrapper" id="bgAdsWrapper">
+            <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Còn lại / Tổng</th><th>Thanh toán</th><th>Ngày tạo</th></tr></thead>
+            <tbody id="bgAdsTableBody"><tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Kết nối Bitget để xem</p></div></td></tr></tbody>
+            </table>
+          </div>
+      </div>
+
+      <!-- 4. ADS ĐỐI THỦ / MARKET -->
+      <div class="card mk-card" id="mkCard-bitget">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Market — ads đối thủ
+          <span class="card-subtitle">Cùng dữ liệu & quy tắc xếp hạng với engine · đã bỏ ads của bạn + whitelist</span>
+        </div>
+        <div class="ap-controls">
+          <div class="mk-side-toggle">
+            <button class="filter-chip mk-chip active" data-side="BUY" onclick="App.mkSetSide('bitget','BUY')">🟢 Ads MUA</button>
+            <button class="filter-chip mk-chip" data-side="SELL" onclick="App.mkSetSide('bitget','SELL')">🔴 Ads BÁN</button>
+          </div>
+          <div class="market-filter-group"><label class="filter-label" title="Số lượng khả dụng tối thiểu của ad đối thủ (USDT) — riêng từng sàn, dùng chung với Telegram (Giá tốt nhất / Market). Khác với 'Số lượng GD' của auto-pricer.">SL khả dụng ≥ <span class="ex-sub">(chung Telegram)</span></label><div class="filter-input-unit"><input type="number" id="mkMinQty-bitget" class="filter-input" value="0" min="0" step="100" onchange="App.mkSetMinQty('bitget')"><span class="filter-unit">USDT</span></div></div>
+          <button class="btn btn-ghost btn-sm" onclick="App.mkLoad('bitget', true)">🔄 Làm mới</button>
+          <span class="card-subtitle" id="mkInfo-bitget"></span>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr><th>#</th><th>Thương nhân</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th></tr></thead>
+          <tbody id="mkBody-bitget"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Mở tab để tải dữ liệu market</p></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ex-section-label">Kết nối</div>
+
       <div class="card" id="bitgetCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
           Bitget P2P
-          <span class="card-subtitle">Kết nối và auto-pricer cho sàn Bitget</span>
+          <span class="card-subtitle">Kết nối API</span>
           <div class="secondary-status-badge" id="bgStatusBadge"><span class="status-dot" id="bgStatusDot"></span><span id="bgStatusText">Chưa kết nối</span></div>
         </div>
 
@@ -237,49 +337,79 @@
           <button class="btn btn-danger" id="bgDisconnectBtn" style="display:none" onclick="App.disconnectBitget()">Ngắt kết nối</button>
           <button class="btn btn-ghost" onclick="App.saveBitgetCreds()">💾 Lưu đăng nhập</button>
         </div>
-
-        <!-- Danh sách ads Bitget -->
-        <div style="margin-top:16px">
-          <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo Bitget của tôi
-            <button class="btn btn-ghost btn-sm" onclick="App.loadBitgetAds()" style="margin-left:auto">Làm mới</button>
-          </div>
-          <div class="table-wrapper" id="bgAdsWrapper">
-            <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Còn lại / Tổng</th><th>Thanh toán</th><th>Ngày tạo</th></tr></thead>
-            <tbody id="bgAdsTableBody"><tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Kết nối Bitget để xem</p></div></td></tr></tbody>
-            </table>
-          </div>
-        </div>
-
-      <!-- Auto-pricer Bitget -->
-        <div style="margin-top:16px">
-          <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bitget
-            <span class="card-subtitle">BUY chỉnh theo giá SELL · SELL chỉnh theo giá BUY</span>
-          </div>
-          <div class="ap-controls">
-            <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="bgScanInterval" class="filter-input" value="1" min="1" step="1"><span class="filter-unit">giây</span></div></div>
-            <div class="market-filter-group"><label class="filter-label">Offset BUY</label><div class="filter-input-unit"><input type="number" id="bgOffsetBuy" class="filter-input" value="-50"><span class="filter-unit">VND</span></div></div>
-            <div class="market-filter-group"><label class="filter-label">Offset SELL</label><div class="filter-input-unit"><input type="number" id="bgOffsetSell" class="filter-input" value="50"><span class="filter-unit">VND</span></div></div>
-            <button class="btn btn-ghost btn-sm" onclick="App.bgApAddRow()">➕ Thêm dòng</button>
-            <button class="btn btn-primary btn-sm" id="bgStartBtn" onclick="App.startBitgetPricer()">▶ Bắt đầu</button>
-            <button class="btn btn-danger btn-sm" id="bgStopBtn" style="display:none" onclick="App.stopBitgetPricer()">⏹ Dừng</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.saveBitgetPricer()">💾 Lưu cấu hình</button>
-            <span class="ap-status-badge stopped" id="bgApBadge">⏹ Đã dừng</span>
-          </div>
-          <div class="ap-table-wrap">
-            <table class="ap-table"><thead><tr><th>Loại</th><th>advId</th><th>Bật</th><th>SL tìm giá</th><th>Offset</th><th>Trần / Sàn</th><th>Min</th><th>Max</th><th>Số lượng</th><th>Refill khi &lt;</th><th>Refill SL</th><th>Trạng thái</th><th></th></tr></thead>
-            <tbody id="bgApTableBody"><tr><td colspan="13" class="ap-empty">Chưa có dòng nào. Bấm "➕ Thêm dòng" để cấu hình.</td></tr></tbody>
-            </table>
-          </div>
-          <div style="margin-top:10px">
-            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bitget</label>
-            <div class="ap-log" id="bgLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
-          </div>
-        </div>
       </div>
     </section>
 
     <!-- ═══════════════ TAB: BYBIT ═══════════════ -->
     <section class="ex-panel" id="exPanel-bybit" data-ex="bybit">
+      <!-- 1. TRẠNG THÁI SÀN & GIÁ THỊ TRƯỜNG -->
+      <div class="ex-strip" id="exStrip-bybit"><div class="ex-strip-loading">Đang tải trạng thái...</div></div>
+
+      <!-- 2. AUTO PRICING -->
+      <div class="card" id="byPricerCard">
+        <div class="card-title">Tự động chỉnh giá Bybit <span class="card-subtitle">Ad MUA theo giá cao nhất của ads MUA · Ad BÁN theo giá thấp nhất của ads BÁN</span></div>
+
+          <div class="ap-controls">
+            <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="byScanInterval" class="filter-input" value="30" min="1" step="1"><span class="filter-unit">giây</span></div></div>
+            <button class="btn btn-ghost btn-sm" onclick="App.byApAddRow()">➕ Thêm dòng</button>
+              <label class="filter-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="byOnlineOnly" checked>
+                Chỉ ads online
+              </label>
+            <button class="btn btn-primary btn-sm" id="byStartBtn" onclick="App.startBybitPricer()">▶ Bắt đầu</button>
+            <button class="btn btn-danger btn-sm" id="byStopBtn" style="display:none" onclick="App.stopBybitPricer()">⏹ Dừng</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.saveBybitPricer()">💾 Đã tự lưu</button>
+            <span class="ap-status-badge stopped" id="byApBadge">⏹ Đã dừng</span>
+          </div>
+          <div class="ap-table-wrap">
+            <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần (MUA) / Sàn (BÁN)</th><th title="Cận thứ 2 (mới): MUA = Sàn (giá không thấp hơn), BÁN = Trần (giá không cao hơn). Để trống = không giới hạn">Sàn (MUA) / Trần (BÁN)</th><th>Min</th><th>Max</th><th title="BUY: tự refill 20000 mỗi lần cập nhật, hoặc giữ số lượng hiện tại của ad">Số lượng</th><th title="Cộng thêm vào số lượng hiện tại (SELL, hoặc BUY khi chọn Giữ SL)">Refill tay</th><th>Trạng thái</th><th></th></tr></thead>
+              <tbody id="byApTableBody"><tr><td colspan="15" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bybit</label>
+            <div class="ap-log" id="byLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
+          </div>
+      </div>
+
+      <!-- 3. QUẢNG CÁO CỦA TÔI -->
+      <div class="card" id="byAdsCard">
+        <div class="card-title">Quảng cáo Bybit của tôi <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button></div>
+        <div id="byAdsSection" style="display:none">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
+              <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. ADS ĐỐI THỦ / MARKET -->
+      <div class="card mk-card" id="mkCard-bybit">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Market — ads đối thủ
+          <span class="card-subtitle">Cùng dữ liệu & quy tắc xếp hạng với engine · đã bỏ ads của bạn + whitelist</span>
+        </div>
+        <div class="ap-controls">
+          <div class="mk-side-toggle">
+            <button class="filter-chip mk-chip active" data-side="BUY" onclick="App.mkSetSide('bybit','BUY')">🟢 Ads MUA</button>
+            <button class="filter-chip mk-chip" data-side="SELL" onclick="App.mkSetSide('bybit','SELL')">🔴 Ads BÁN</button>
+          </div>
+          <div class="market-filter-group"><label class="filter-label" title="Số lượng khả dụng tối thiểu của ad đối thủ (USDT) — riêng từng sàn, dùng chung với Telegram (Giá tốt nhất / Market). Khác với 'Số lượng GD' của auto-pricer.">SL khả dụng ≥ <span class="ex-sub">(chung Telegram)</span></label><div class="filter-input-unit"><input type="number" id="mkMinQty-bybit" class="filter-input" value="0" min="0" step="100" onchange="App.mkSetMinQty('bybit')"><span class="filter-unit">USDT</span></div></div>
+          <button class="btn btn-ghost btn-sm" onclick="App.mkLoad('bybit', true)">🔄 Làm mới</button>
+          <span class="card-subtitle" id="mkInfo-bybit"></span>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr><th>#</th><th>Thương nhân</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th></tr></thead>
+          <tbody id="mkBody-bybit"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Mở tab để tải dữ liệu market</p></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ex-section-label">Kết nối</div>
+
       <div class="card" id="bybitCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
@@ -295,49 +425,90 @@
           <button class="btn btn-danger" id="byDisconnectBtn" style="display:none" onclick="App.disconnectBybit()">Ngắt</button>
           <button class="btn btn-ghost" onclick="App.saveBybitCreds()">💾 Lưu đăng nhập</button>
         </div>
-        <div id="byAdsSection" style="display:none;margin-top:16px">
-          <div class="card-title" style="font-size:12px;margin-bottom:12px">Quảng cáo của tôi
-            <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadBybitAds()">Tải lại</button>
-          </div>
-          <div class="table-wrapper">
-            <table>
-              <thead><tr><th>Item ID</th><th>Loại</th><th>Token</th><th>Fiat</th><th>Giá</th><th>Min</th><th>Max</th><th>Khả dụng</th><th>TT ad</th><th>Online</th></tr></thead>
-              <tbody id="byAdsBody"><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Chưa có dữ liệu</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div style="margin-top:16px">
-          <div class="card-title" style="font-size:12px;margin-bottom:12px">Auto-Pricer Bybit
-            <span class="card-subtitle">BUY ← giá SELL · SELL ← giá BUY · cache giá mỗi vòng</span>
-          </div>
-          <div class="ap-controls">
-            <div class="market-filter-group"><label class="filter-label">Quét mỗi</label><div class="filter-input-unit"><input type="number" id="byScanInterval" class="filter-input" value="30" min="1" step="1"><span class="filter-unit">giây</span></div></div>
-            <button class="btn btn-ghost btn-sm" onclick="App.byApAddRow()">➕ Thêm dòng</button>
-              <label class="filter-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="checkbox" id="byOnlineOnly" checked>
-                Chỉ ads online
-              </label>
-            <button class="btn btn-primary btn-sm" id="byStartBtn" onclick="App.startBybitPricer()">▶ Bắt đầu</button>
-            <button class="btn btn-danger btn-sm" id="byStopBtn" style="display:none" onclick="App.stopBybitPricer()">⏹ Dừng</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.saveBybitPricer()">💾 Lưu cấu hình</button>
-            <span class="ap-status-badge stopped" id="byApBadge">⏹ Đã dừng</span>
-          </div>
-          <div class="ap-table-wrap">
-            <table class="ap-table"><thead><tr><th>Loại</th><th>Ad ID</th><th>Token</th><th>Fiat</th><th>Bật</th><th>SL GD</th><th>Offset</th><th>Trần/Sàn</th><th>Min</th><th>Max</th><th title="BUY: tự refill 20000 mỗi lần cập nhật, hoặc giữ số lượng hiện tại của ad">Số lượng</th><th title="Cộng thêm vào số lượng hiện tại (SELL, hoặc BUY khi chọn Giữ SL)">Refill tay</th><th>Trạng thái</th><th></th></tr></thead>
-              <tbody id="byApTableBody"><tr><td colspan="14" class="ap-empty">Chưa có dòng nào.</td></tr></tbody>
-            </table>
-          </div>
-          <div style="margin-top:10px">
-            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase">Nhật ký Bybit</label>
-            <div class="ap-log" id="byLog"><div class="ap-log-empty">Chưa có hoạt động</div></div>
-          </div>
-        </div>
       </div>
     </section>
 
     <!-- ═══════════════ TAB: BINGX ═══════════════ -->
     <section class="ex-panel" id="exPanel-bingx" data-ex="bingx">
+      <!-- 1. TRẠNG THÁI SÀN & GIÁ THỊ TRƯỜNG -->
+      <div class="ex-strip" id="exStrip-bingx"><div class="ex-strip-loading">Đang tải trạng thái...</div></div>
+
+      <!-- 2. AUTO PRICING -->
+      <!-- CARD: BINGX — AUTO-PRICER -->
+      <div class="card" id="bxPricerCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Tự động chỉnh giá BingX
+          <span class="card-subtitle">MUA theo giá MUA cao nhất · BÁN theo giá BÁN thấp nhất · chỉ sửa khi giá đổi</span>
+        </div>
+        <div class="ap-controls">
+          <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="bxScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
+          <div class="market-filter-group"><label class="filter-label" title="Mỗi trang 100 ads">Số trang market</label><div class="filter-input-unit"><input type="number" id="bxMarketPages" class="filter-input" value="3" min="1" max="10" step="1"><span class="filter-unit">trang</span></div></div>
+          <button class="btn btn-primary btn-sm" id="bxStartBtn" onclick="App.startBingxPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
+          <button class="btn btn-danger btn-sm" id="bxStopBtn" style="display:none" onclick="App.stopBingxPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.saveBingxPricer()">💾 Đã tự lưu</button>
+          <span class="ap-status-badge stopped" id="bxApBadge">⏹ Đã dừng</span>
+        </div>
+        <div class="ap-table-wrap">
+          <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th title="Số tiền (VND) dùng để lọc ads đối thủ: phải nằm trong giới hạn min–max của ad đối thủ">SL tìm giá</th><th>Offset</th><th title="MUA: giá không vượt quá. BÁN: giá không thấp hơn">Trần (MUA) / Sàn (BÁN)</th><th title="Cận thứ 2 (mới): MUA = Sàn (giá không thấp hơn), BÁN = Trần (giá không cao hơn). Để trống = không giới hạn">Sàn (MUA) / Trần (BÁN)</th><th title="Bỏ qua đối thủ có số lệnh 30 ngày ít hơn">Lệnh 30d ≥</th><th title="Bỏ trống = giữ nguyên của ad">Min</th><th title="Bỏ trống = giữ nguyên của ad">Max</th><th>Giá hiện tại</th><th>Trạng thái</th></tr></thead>
+          <tbody id="bxApTableBody"><tr><td colspan="11" class="ap-empty">Kết nối BingX để cấu hình</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký BingX</label>
+            <button class="btn btn-ghost btn-sm" onclick="App.clearBingxLog()">Xóa log</button>
+          </div>
+          <div class="ap-log" id="bxLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
+        </div>
+      </div>
+
+      <!-- 3. QUẢNG CÁO CỦA TÔI -->
+      <!-- CARD: BINGX — QUẢNG CÁO CỦA TÔI (online + offline) -->
+      <div class="card" id="bxAdsCard">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          Quảng cáo BingX của tôi
+          <span class="card-subtitle" id="bxAdsCount"></span>
+          <button class="btn btn-ghost btn-sm" onclick="App.loadBingxAds()" style="margin-left:auto">Làm mới</button>
+        </div>
+        <div class="my-ads-filters">
+          <button class="filter-chip bx-chip active" data-filter="ALL" onclick="App.filterBingxAds('ALL')">Tất cả</button>
+          <button class="filter-chip bx-chip" data-filter="ON" onclick="App.filterBingxAds('ON')">🟢 Online</button>
+          <button class="filter-chip bx-chip" data-filter="OFF" onclick="App.filterBingxAds('OFF')">🔴 Offline</button>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Tổng SL</th><th>Giới hạn</th><th>Thanh toán</th><th>TG thanh toán</th></tr></thead>
+          <tbody id="bxAdsBody"><tr class="empty-row"><td colspan="9"><div class="empty-state"><p>Kết nối BingX để xem quảng cáo</p></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. ADS ĐỐI THỦ / MARKET -->
+      <div class="card mk-card" id="mkCard-bingx">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Market — ads đối thủ
+          <span class="card-subtitle">Cùng dữ liệu & quy tắc xếp hạng với engine · đã bỏ ads của bạn + whitelist</span>
+        </div>
+        <div class="ap-controls">
+          <div class="mk-side-toggle">
+            <button class="filter-chip mk-chip active" data-side="BUY" onclick="App.mkSetSide('bingx','BUY')">🟢 Ads MUA</button>
+            <button class="filter-chip mk-chip" data-side="SELL" onclick="App.mkSetSide('bingx','SELL')">🔴 Ads BÁN</button>
+          </div>
+          <div class="market-filter-group"><label class="filter-label" title="Số lượng khả dụng tối thiểu của ad đối thủ (USDT) — riêng từng sàn, dùng chung với Telegram (Giá tốt nhất / Market). Khác với 'Số lượng GD' của auto-pricer.">SL khả dụng ≥ <span class="ex-sub">(chung Telegram)</span></label><div class="filter-input-unit"><input type="number" id="mkMinQty-bingx" class="filter-input" value="0" min="0" step="100" onchange="App.mkSetMinQty('bingx')"><span class="filter-unit">USDT</span></div></div>
+          <button class="btn btn-ghost btn-sm" onclick="App.mkLoad('bingx', true)">🔄 Làm mới</button>
+          <span class="card-subtitle" id="mkInfo-bingx"></span>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr><th>#</th><th>Thương nhân</th><th>Giá</th><th>Khả dụng</th><th>Giới hạn</th><th>Thanh toán</th><th>Hoàn thành</th></tr></thead>
+          <tbody id="mkBody-bingx"><tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Mở tab để tải dữ liệu market</p></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ex-section-label">Kết nối</div>
+
       <!-- CARD: BINGX P2P — KẾT NỐI -->
       <div class="card" id="bingxCard">
         <div class="card-title">
@@ -361,56 +532,58 @@
         </div>
         <div id="bxDiagResult" class="bx-diag" style="display:none"></div>
       </div>
+    </section>
 
-      <!-- CARD: BINGX — QUẢNG CÁO CỦA TÔI (online + offline) -->
-      <div class="card" id="bxAdsCard">
+    <!-- ═══════════════ TAB: TELEGRAM ═══════════════ -->
+    <section class="ex-panel" id="exPanel-telegram" data-ex="telegram">
+      <div class="card" id="tgCard">
         <div class="card-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-          Quảng cáo BingX của tôi
-          <span class="card-subtitle" id="bxAdsCount"></span>
-          <button class="btn btn-ghost btn-sm" onclick="App.loadBingxAds()" style="margin-left:auto">Làm mới</button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 4L3 11l6 2 2 6 3-4 5 4 2-15z"/></svg>
+          Telegram Bot
+          <span class="card-subtitle">Quản lý quảng cáo từ xa · dùng chung engine & cấu hình với dashboard</span>
+          <div class="secondary-status-badge"><span class="status-dot" id="tgStatusDot"></span><span id="tgStatusText">Chưa cấu hình</span></div>
         </div>
-        <div class="my-ads-filters">
-          <button class="filter-chip bx-chip active" data-filter="ALL" onclick="App.filterBingxAds('ALL')">Tất cả</button>
-          <button class="filter-chip bx-chip" data-filter="ON" onclick="App.filterBingxAds('ON')">🟢 Online</button>
-          <button class="filter-chip bx-chip" data-filter="OFF" onclick="App.filterBingxAds('OFF')">🔴 Offline</button>
+        <div class="form-grid">
+          <div class="form-group"><label>BOT TOKEN</label><div class="input-wrapper"><input type="password" id="tgToken" placeholder="Dán token từ @BotFather" autocomplete="off" spellcheck="false"><button class="input-toggle" onclick="App.togglePasswordVisibility('tgToken')" type="button">👁</button></div>
+            <span class="tg-hint" id="tgTokenHint">Token chỉ lưu trên máy chạy app, không bao giờ hiển thị lại trên trình duyệt.</span></div>
+          <div class="form-group"><label>BẬT BOT</label><label class="toggle" style="margin-top:8px"><input type="checkbox" id="tgEnabled"><span class="toggle-slider"></span></label></div>
         </div>
-        <div class="table-wrapper">
-          <table><thead><tr><th>Mã QC</th><th>Loại</th><th>Trạng thái</th><th>Coin</th><th>Giá</th><th>Tổng SL</th><th>Giới hạn</th><th>Thanh toán</th><th>TG thanh toán</th></tr></thead>
-          <tbody id="bxAdsBody"><tr class="empty-row"><td colspan="9"><div class="empty-state"><p>Kết nối BingX để xem quảng cáo</p></div></td></tr></tbody>
-          </table>
+        <div class="form-grid" style="margin-top:10px">
+          <div class="form-group"><label>AUTHORIZED TELEGRAM USER ID</label><input type="text" id="tgUserId" placeholder="vd 123456789" inputmode="numeric" spellcheck="false"></div>
+          <div class="form-group"><label>AUTHORIZED CHAT ID</label><input type="text" id="tgChatId" placeholder="vd 123456789 (chat riêng = User ID)" inputmode="numeric" spellcheck="false"></div>
         </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="tgSaveBtn" onclick="App.saveTelegram()">💾 Lưu & áp dụng</button>
+          <button class="btn btn-ghost" id="tgTestBtn" onclick="App.testTelegram()">📨 Kiểm tra kết nối</button>
+        </div>
+        <div class="tg-status-box" id="tgStatusBox"></div>
+        <details class="tg-help">
+          <summary>Cách lấy Token, User ID, Chat ID</summary>
+          <ol>
+            <li>Mở Telegram, chat với <b>@BotFather</b> → gõ <code>/newbot</code> → đặt tên → nhận <b>Bot Token</b>.</li>
+            <li>Chat với <b>@userinfobot</b> để biết <b>User ID</b> của bạn.</li>
+            <li>Chat riêng với bot: <b>Chat ID = User ID</b>. Dùng trong nhóm: thêm bot vào nhóm, Chat ID của nhóm là số âm (vd -100…).</li>
+            <li>Bấm <b>Lưu &amp; áp dụng</b>, rồi <b>Kiểm tra kết nối</b>. Mở bot, gõ <code>/menu</code>.</li>
+          </ol>
+          <p>Bot chỉ trả lời đúng User ID + Chat ID ở trên; mọi người khác bị từ chối. Bot chạy cùng app trên máy này (không cần domain) — tắt app thì bot cũng tắt.</p>
+        </details>
       </div>
 
-      <!-- CARD: BINGX — AUTO-PRICER -->
-      <div class="card" id="bxPricerCard">
+      <div class="card" id="auditCard">
         <div class="card-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          Tự động chỉnh giá BingX
-          <span class="card-subtitle">MUA theo giá MUA cao nhất · BÁN theo giá BÁN thấp nhất · chỉ sửa khi giá đổi</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          Nhật ký thay đổi
+          <span class="card-subtitle">Thay đổi cấu hình & kết quả cập nhật lên sàn (web / Telegram / engine) · data/audit.log</span>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="App.loadAudit()">Làm mới</button>
         </div>
-        <div class="ap-controls">
-          <div class="market-filter-group"><label class="filter-label">Thời gian quét</label><div class="filter-input-unit"><input type="number" id="bxScanInterval" class="filter-input" value="30" min="5" step="1"><span class="filter-unit">giây</span></div></div>
-          <div class="market-filter-group"><label class="filter-label" title="Mỗi trang 100 ads">Số trang market</label><div class="filter-input-unit"><input type="number" id="bxMarketPages" class="filter-input" value="3" min="1" max="10" step="1"><span class="filter-unit">trang</span></div></div>
-          <button class="btn btn-primary btn-sm" id="bxStartBtn" onclick="App.startBingxPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Bắt đầu</button>
-          <button class="btn btn-danger btn-sm" id="bxStopBtn" style="display:none" onclick="App.stopBingxPricer()"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.saveBingxPricer()">💾 Lưu cấu hình</button>
-          <span class="ap-status-badge stopped" id="bxApBadge">⏹ Đã dừng</span>
-        </div>
-        <div class="ap-table-wrap">
-          <table class="ap-table"><thead><tr><th>Quảng cáo</th><th>Bật</th><th title="Số tiền (VND) dùng để lọc ads đối thủ: phải nằm trong giới hạn min–max của ad đối thủ">SL tìm giá</th><th>Offset</th><th title="MUA: giá không vượt quá. BÁN: giá không thấp hơn">Trần / Sàn</th><th title="Bỏ qua đối thủ có số lệnh 30 ngày ít hơn">Lệnh 30d ≥</th><th title="Bỏ trống = giữ nguyên của ad">Min</th><th title="Bỏ trống = giữ nguyên của ad">Max</th><th>Giá hiện tại</th><th>Trạng thái</th></tr></thead>
-          <tbody id="bxApTableBody"><tr><td colspan="10" class="ap-empty">Kết nối BingX để cấu hình</td></tr></tbody>
+        <div class="table-wrapper">
+          <table><thead><tr><th>Thời gian</th><th>Sàn</th><th>Quảng cáo</th><th>Tham số</th><th>Cũ</th><th>Mới</th><th>Nguồn</th><th>Kết quả</th><th>Phản hồi sàn</th></tr></thead>
+          <tbody id="auditBody"><tr class="empty-row"><td colspan="9"><div class="empty-state"><p>Chưa có thay đổi nào</p></div></td></tr></tbody>
           </table>
-        </div>
-        <div style="margin-top:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Nhật ký BingX</label>
-            <button class="btn btn-ghost btn-sm" onclick="App.clearBingxLog()">Xóa log</button>
-          </div>
-          <div class="ap-log" id="bxLog"><div class="ap-log-empty">Chưa có hoạt động nào</div></div>
         </div>
       </div>
     </section>
+
 
     <!-- BẢNG TRẠNG THÁI CÁC SÀN (luôn hiển thị) -->
     <div class="card" id="exSummaryCard">

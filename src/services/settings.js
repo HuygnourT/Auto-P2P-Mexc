@@ -3,7 +3,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 
 const SETTINGS_PATH = path.join(__dirname, '..', '..', 'data', 'settings.json');
-const DEFAULT = { mexc: {}, bitget: {}, bybit: {}, mexcPricer: {}, bitgetPricer: {}, bybitPricer: {}, mexcAdText: {}, bingx: {}, bingxPricer: {} };
+const DEFAULT = { mexc: {}, bitget: {}, bybit: {}, mexcPricer: {}, bitgetPricer: {}, bybitPricer: {}, mexcAdText: {}, bingx: {}, bingxPricer: {}, telegram: {}, marketFilters: {} };
 const ALLOWED = Object.keys(DEFAULT);
 
 function getSettings() {
@@ -29,8 +29,11 @@ function saveSection(section, data) {
   try {
     const dir = path.dirname(SETTINGS_PATH);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
-    logger.info(`[Settings] Saved section: ${section}`);
+    // Ghi an toàn: ghi file tạm rồi đổi tên (tránh hỏng file khi đang ghi thì tắt máy)
+    const tmp = SETTINGS_PATH + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(settings, null, 2));
+    fs.renameSync(tmp, SETTINGS_PATH);
+    logger.debug(`[Settings] Saved section: ${section}`);
   } catch (err) {
     logger.error(`[Settings] Write error: ${err.message}`);
     throw err;
