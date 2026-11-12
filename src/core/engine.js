@@ -483,9 +483,8 @@ async function cycleBingx(ctx) {
 
       if (sent) await sleep(600);   // giới hạn sửa ad BingX: 2 lần/giây
       sent = true;
+      // Auto repricing CHỈ đổi giá → 3.19 modifyPrice {advertNo, priceType, fixedPrice}; không gửi Min/Max/SL
       const body = { advertNo: ad.id, price: String(newPrice) };
-      if (!isBlank(cfg.minAmount)) body.minAmount = String(cfg.minAmount);
-      if (!isBlank(cfg.maxAmount)) body.maxAmount = String(cfg.maxAmount);
       const r = await withLock(`bingx:${ad.id}`, () => a.sendUpdate(body));
       if (r.ok) {
         ad.price = newPrice; ad.floating = false;
