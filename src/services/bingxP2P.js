@@ -13,7 +13,7 @@ const logger = require('../utils/logger');
  *   - Gửi lên: query string với giá trị đã URL-encode + "&signature=..."
  *
  * Endpoint dùng:
- *   3.1  GET  /openApi/p2p/v1/advert/list           — ads trên market (không cần ký)
+ *   3.1  GET  /openApi/p2p/v1/advert/list           — ads trên market (PHẢI ký: thiếu chữ ký → code 100412 "Null signature")
  *   3.8  POST /openApi/p2p/v1/merchant/advert/modify — sửa ad (đổi giá)
  *   3.10 GET  /openApi/p2p/v1/merchant/myAdvert      — ads của tôi (Listed + Delisted)
  *
@@ -244,7 +244,9 @@ class BingxP2P {
    * @param tradeType 1 = người dùng MUA (thấy ads BÁN của merchant), 2 = người dùng BÁN (thấy ads MUA)
    */
   async getMarketAds({ asset = 'USDT', fiatUnit = 'VND', tradeType, pageId = 0, pageSize = 100 }) {
-    return this._call('market', 'GET', { asset, fiatUnit, tradeType, pageId, pageSize }, false);
+    // BingX yêu cầu chữ ký cho cả API market (gửi không ký → 100412 Null signature)
+    if (!this.secretKey) throw new Error('BingX chưa kết nối (market cần API key để ký)');
+    return this._call('market', 'GET', { asset, fiatUnit, tradeType, pageId, pageSize }, true);
   }
 
   /** Lấy nhiều trang market, gộp lại */
@@ -404,7 +406,7 @@ async function diagnose({ apiKey, secretKey }) {
     return steps;
   }
 
-  // 2. Market P2P (public, không cần ký)
+  // 2. Market P2P (có ký bằng API key)
   try {
     const r = await t.getMarketAds({ tradeType: 1, pageId: 0, pageSize: 5 });
     add(`2. Market P2P (3.1) ${t.workingPath.market || ''}`, r.code === 0,

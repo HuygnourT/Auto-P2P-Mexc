@@ -387,12 +387,12 @@ const BX_TRADE_TYPE = { BUY: 2, SELL: 1 };
 const bingx = {
   id: 'bingx', label: 'BingX',
   caps: {
-    myAds: { ok: true }, market: { ok: true, note: 'Không cần ký' },
+    myAds: { ok: true }, market: { ok: true, note: 'Cần kết nối API (có ký)' },
     editPrice: { ok: true }, editQuantity: { ok: true, note: 'advert/modify: totalNumber (TỔNG số lượng, không phải khả dụng)' },
     editMinMax: { ok: true }, status: { ok: true, note: 'status 0 Listed / 1 Delisted' },
   },
   isConnected: () => registry.bingx.isConnected(),
-  marketReady: () => ({ ok: true }),
+  marketReady: () => (registry.bingx.isConnected() ? { ok: true } : { ok: false, reason: 'Chưa kết nối BingX' }),
 
   normalizeAd(a) {
     return {
