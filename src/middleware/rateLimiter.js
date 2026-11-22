@@ -17,7 +17,9 @@ const requestCounts = new Map();
 const SKIP_PREFIXES = ['/api/bitget', '/api/bybit', '/api/bingx', '/api/settings', '/api/status',
   '/api/config', '/api/whitelist', '/api/binance', '/api/mexc/ad-text',
   // engine chạy trong server và tự giãn cách request tới sàn; SSE là kết nối dài
-  '/api/engine', '/api/events', '/api/telegram', '/api/market/best', '/api/market/list', '/api/audit'];
+  '/api/engine', '/api/events', '/api/telegram', '/api/market/best', '/api/market/list', '/api/audit',
+  // dữ liệu market dùng chung (có cache + giãn cách theo sàn) và theo dõi cạnh tranh — nội bộ
+  '/api/market/', '/api/competition'];
 const MEXC_PREFIXES = ['/api/'];
 
 function rateLimiter(req, res, next) {

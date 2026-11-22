@@ -296,6 +296,19 @@ const bitget = {
 // ══════════════════════════════════════════════════════════
 const BY_API_SIDE = { BUY: '0', SELL: '1' };
 const BY_PAYMENT_IDS = ['23871618', '23871387'];   // cố định như engine Bybit cũ
+/**
+ * Bybit: ad có giới hạn quốc gia (tradingPreferenceSet.hasNationalLimit ≠ 0 hoặc nationalLimit ≠ "")
+ * → chỉ người dùng của quốc gia đó giao dịch được; người Việt Nam không khớp được → "giá ảo" với mình.
+ * Ad không có tradingPreferenceSet → không đủ thông tin → coi là không giới hạn.
+ */
+function bybitNationalLimited(a) {
+  const tp = a?.tradingPreferenceSet;
+  if (!tp || typeof tp !== 'object') return false;
+  const has = Number(tp.hasNationalLimit ?? 0) !== 0;
+  const list = String(tp.nationalLimit ?? '').trim() !== '';
+  return has || list;
+}
+
 const bybit = {
   id: 'bybit', label: 'Bybit',
   caps: {
@@ -333,7 +346,9 @@ const bybit = {
       id: String(a.id ?? ''), name: a.nickName || '—', side: Number(a.side) === 0 ? 'BUY' : 'SELL',
       price: num(a.price), available: num(a.lastQuantity ?? a.quantity), min: num(a.minAmount), max: num(a.maxAmount),
       payments: (a.payments || []).map(p => `PM-${p}`), completion: rate === null ? null : rate / 100,
-      online: a.isOnline === true, lastOnline: null, raw: a,
+      online: a.isOnline === true, lastOnline: null,
+      nationalLimited: bybitNationalLimited(a), nationalLimit: a.tradingPreferenceSet?.nationalLimit || '',
+      raw: a,
     };
   },
 

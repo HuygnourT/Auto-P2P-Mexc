@@ -18,6 +18,7 @@ const market = require('../core/market');
 const adapters = require('../core/adapters');
 const ops = require('../core/ops');
 const audit = require('../core/audit');
+const competition = require('../core/competition');
 const { parseUserNumber, fmt, sleep } = require('../core/util');
 
 const EXS = ['mexc', 'bybit', 'bitget', 'bingx'];
@@ -101,11 +102,11 @@ function mainMenu() {
   return {
     text: `<b>P2P MANAGEMENT</b>\n${s}\n\n🟢 đang chạy · ⏸ tạm dừng · 🔴 lỗi · ⚪ chưa kết nối`,
     markup: kb([
-      [btn('📋 Quảng cáo của tôi', 'x:my')],
-      [btn('⚙️ Quản lý quảng cáo', 'x:mg')],
-      [btn('🔎 Market P2P', 'x:mk'), btn('🏆 Giá tốt nhất', 'x:bp')],
+      [btn('📋 Quảng cáo của tôi', 'ma:0')],
       [btn('⏯ Điều khiển Auto Pricing', 'ap')],
-      [btn('🔄 Làm mới dữ liệu', 'x:rf')],
+      [btn('📈 Cạnh tranh top market', 'co')],
+      [btn('🏆 Giá tốt nhất', 'x:bp'), btn('🔎 Market P2P', 'x:mk')],
+      [btn('🔄 Làm mới', 'rf:all')],
     ]),
   };
 }
@@ -173,7 +174,7 @@ const PARAM_SHORT = { quantity: 'Số lượng QC', ceiling: 'Trần giá', floo
 
 async function adScreen(ex, adId, { maxAgeMs = 10000 } = {}) {
   const view = await ops.getAdView(ex, adId, { maxAgeMs });
-  const back = [btn('⬅️ Danh sách', `mg:${ex}:0`), ...backMain()];
+  const back = [btn('⬅️ Danh sách', 'ma:p'), ...backMain()];
   if (!view.ok) return { text: `❌ ${esc(view.error)}`, markup: kb([back]) };
   const { ad, values } = view;
   const e = view.engine;
@@ -231,7 +232,7 @@ async function marketScreen(ex, side, page, { maxAgeMs = 15000 } = {}) {
   const pages = Math.max(1, Math.ceil(items.length / MARKET_PER_PAGE));
   page = Math.min(Math.max(0, page), pages - 1);
   const lines = [head,
-    `Bộ lọc: SL khả dụng ${minQty ? `≥ ${fmt(minQty)} USDT` : 'tất cả'} · bỏ ads của bạn + whitelist${ex === 'bybit' && store.section('bybit').onlineOnly !== false ? ' · chỉ online' : ''}`,
+    `Bộ lọc: SL khả dụng ${minQty ? `≥ ${fmt(minQty)} USDT` : 'tất cả'} · bỏ ads của bạn + whitelist${ex === 'bybit' && store.section('bybit').onlineOnly !== false ? ' · chỉ online' : ''}${ex === 'bybit' && store.section('bybit').noNationalLimit !== false ? ' · bỏ ads giới hạn quốc gia' : ''}`,
     `Xếp hạng: ${side === 'BUY' ? 'giá cao → thấp' : 'giá thấp → cao'} · ${items.length}/${r.total} ads`,
     `Dữ liệu lúc ${timeVN(r.at)}${r.cached ? ` (cache, ${ago(r.at)})` : ' (vừa lấy)'}`, ''];
   if (!items.length) lines.push('Không có quảng cáo phù hợp.');
@@ -266,7 +267,7 @@ async function bestScreen(target, { maxAgeMs = 15000 } = {}) {
     const adInfo = a => (a ? ` (${esc(a.name)}, Limit ${fmt(a.min)}–${fmt(a.max)} VND)` : '');
     lines.push(`• Best BUY: ${b.buy !== null ? `<b>${fmt(b.buy, 2)}</b> VND${adInfo(b.buyAd)}` : none}`);
     lines.push(`• Best SELL: ${b.sell !== null ? `<b>${fmt(b.sell, 2)}</b> VND${adInfo(b.sellAd)}` : none}`);
-    lines.push(`• Nguồn: ${esc(b.filters?.depth || '')}${b.filters?.onlineOnly ? ' · chỉ online' : ''}${b.cached ? ` · cache ${ago(b.at)}` : ''}${b.error ? ` · ⚠️ ${esc(b.error)}` : ''}`, '');
+    lines.push(`• Nguồn: ${esc(b.filters?.depth || '')}${b.filters?.onlineOnly ? ' · chỉ online' : ''}${b.filters?.noNationalLimit ? ' · bỏ ads giới hạn quốc gia' : ''}${b.cached ? ` · cache ${ago(b.at)}` : ''}${b.error ? ` · ⚠️ ${esc(b.error)}` : ''}`, '');
     if (b.at) oldest = Math.min(oldest, b.at);
     if (b.cached) anyCached = true;
   }
@@ -284,7 +285,7 @@ async function refreshScreen(target) {
     lines.push(`${r.ok ? '✅' : '❌'} ${LABEL[ex]}: ${r.ok ? `${engine.getMyAds(ex).length} quảng cáo` : esc(r.error)} · market ${b.error ? '⚠️ ' + esc(b.error) : 'OK'}`);
   }
   lines.push('', `Lúc ${timeVN(Date.now())}`);
-  return { text: lines.join('\n'), markup: kb([[btn('⬅️ Quay lại', 'x:rf'), ...backMain()]]) };
+  return { text: lines.join('\n'), markup: kb([target === 'all' ? [btn('🔄 Làm mới lại', 'rf:all'), ...backMain()] : [btn('⬅️ Quay lại', 'x:rf'), ...backMain()]]) };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -405,7 +406,7 @@ async function bestDetailScreen(ex, side, { maxAgeMs = 15000 } = {}) {
   let b;
   try { b = await market.best(ex, { limitMin: lm, maxAgeMs, cfgSection: sec }); } catch (e) { b = { error: e.message, buy: null, sell: null }; }
   const lines = [`<b>🏆 ${LABEL[ex].toUpperCase()} — GIÁ TỐT NHẤT (USDT/VND)</b>`,
-    `Bộ lọc: Limit Min: <b>${limitLabel(lm)}</b> · bỏ ads của bạn + whitelist${b.filters?.onlineOnly ? ' · chỉ online' : ''}`,
+    `Bộ lọc: Limit Min: <b>${limitLabel(lm)}</b> · bỏ ads của bạn + whitelist${b.filters?.onlineOnly ? ' · chỉ online' : ''}${b.filters?.noNationalLimit ? ' · bỏ ads giới hạn quốc gia' : ''}`,
     '<i>Best BUY = giá cao nhất của ads MUA · Best SELL = giá thấp nhất của ads BÁN (cùng quy tắc engine)</i>', ''];
   if (b.error && b.buy === null && b.sell === null && !b.buyTop && !b.sellTop) {
     lines.push(`⚠️ ${esc(b.error)}`);
@@ -659,8 +660,281 @@ async function onConfirm(msg, token) {
   }
   const backRow = op.back === 'apa'
     ? [btn('⬅️ Danh sách QC', `apa:${op.ex}:0:r`), btn('⬅️ Về quảng cáo', `ad:${op.ex}:${op.adId}:r`)]
-    : [btn('⬅️ Về quảng cáo', `ad:${op.ex}:${op.adId}:r`)];
+    : String(op.back || '').startsWith('cs:')
+      ? [btn('⬅️ Cạnh tranh', op.back), btn('⬅️ Về quảng cáo', `ad:${op.ex}:${op.adId}:r`)]
+      : [btn('⬅️ Về quảng cáo', `ad:${op.ex}:${op.adId}:r`)];
   return edit(msg, lines.join('\n'), kb([[...backRow, ...backMain()]]));
+}
+
+// ══════════════════════════════════════════════════════════
+// ★ QUẢNG CÁO CỦA TÔI — GỘP TẤT CẢ SÀN ĐÃ KẾT NỐI (không cần chọn sàn trước)
+//   Bộ lọc nằm ngay dưới danh sách, bấm là áp dụng ngay (không có nút Áp dụng).
+//   Mặc định: Online · Tất cả chiều · Auto Repricing Bật · Tất cả sàn.
+//   Sắp xếp: sàn đang chạy Auto Pricing → ads bật Auto Repricing → còn lại; trong nhóm: theo sàn, rồi mã QC.
+// ══════════════════════════════════════════════════════════
+const MA_DEFAULT = { st: 'on', sd: 'all', au: 'on', ex: 'all' };
+const MA_PER_PAGE = 6;
+const MA_LABEL = { ...AF_LABEL, ex: { all: 'Tất cả sàn', mexc: 'MEXC', bybit: 'Bybit', bitget: 'Bitget', bingx: 'BingX' } };
+const maFilterOf = sess => ({ ...MA_DEFAULT, ...(sess.ma || {}) });
+const shortAdId = id => (String(id).length > 12 ? '…' + String(id).slice(-8) : String(id));
+
+async function myAllScreen(sess, page = 0, { maxAgeMs = 15000 } = {}) {
+  const f = maFilterOf(sess);
+  const exList = f.ex === 'all' ? EXS : [f.ex];
+  const warnings = [];
+  const loaded = await Promise.all(exList.map(async ex => {
+    if (!adapters.get(ex).isConnected()) { warnings.push(`⚪ ${LABEL[ex]}: chưa kết nối`); return []; }
+    const r = await engine.refreshMyAds(ex, { maxAgeMs }).catch(err => ({ ok: false, error: err.message }));
+    const ads = engine.getMyAds(ex);
+    if (!r.ok) warnings.push(`⚠️ ${LABEL[ex]}: ${ads.length ? 'làm mới lỗi, đang hiện dữ liệu cũ' : 'không lấy được quảng cáo'} — ${esc(r.error)}`);
+    return ads.map(ad => ({ ex, ad }));
+  }));
+  const exIdx = ex => EXS.indexOf(ex);
+  const all = loaded.flat();
+  const rows = all
+    .filter(({ ex, ad }) => matchAdFilter(ex, ad, f))
+    .map(x => ({ ...x, running: !!engine.statusOf(x.ex).running, auto: autoEnabled(x.ex, x.ad.id) }))
+    .sort((a, b) => (a.running === b.running ? 0 : a.running ? -1 : 1)
+      || (a.auto === b.auto ? 0 : a.auto ? -1 : 1)
+      || exIdx(a.ex) - exIdx(b.ex)
+      || String(a.ad.id).localeCompare(String(b.ad.id), 'en', { numeric: true }));
+
+  const pages = Math.max(1, Math.ceil(rows.length / MA_PER_PAGE));
+  page = Math.min(Math.max(0, Number(page) || 0), pages - 1);
+  sess.maPage = page;
+  const slice = rows.slice(page * MA_PER_PAGE, (page + 1) * MA_PER_PAGE);
+
+  const lines = ['<b>📋 QUẢNG CÁO P2P CỦA TÔI</b>',
+    `Bộ lọc: ${MA_LABEL.st[f.st] === 'Tất cả' ? 'Mọi trạng thái' : MA_LABEL.st[f.st]} | ${f.sd === 'all' ? 'MUA + BÁN' : MA_LABEL.sd[f.sd]} | Repricing ${f.au === 'all' ? 'Bật + Tắt' : f.au === 'on' ? 'BẬT' : 'TẮT'} | ${MA_LABEL.ex[f.ex]}`,
+    `Khớp: <b>${rows.length}</b>/${all.length} quảng cáo${rows.length ? ` · trang ${page + 1}/${pages}` : ''}`];
+  if (warnings.length) lines.push(...warnings);
+  lines.push('');
+  if (!rows.length) lines.push(all.length ? NO_MATCH : 'Không có quảng cáo nào trên các sàn đã kết nối.');
+  let lastEx = null;
+  slice.forEach(({ ex, ad, auto, running }, i) => {
+    if (ex !== lastEx) { lines.push(`<b>${LABEL[ex].toUpperCase()}</b>${running ? ' · ▶️ Auto Pricing đang chạy' : ''}`); lastEx = ex; }
+    const n = page * MA_PER_PAGE + i + 1;
+    lines.push(
+      `${n}. ${ad.side === 'BUY' ? '🟩 MUA' : '🟥 BÁN'} #${esc(ad.id)} — <b>${ad.price !== null ? fmt(ad.price, 2) : 'thả nổi'}</b> ${esc(ad.fiat)}`,
+      `    SL ${fmt(ad.available, 2)} ${esc(ad.asset)} · ${ad.online ? '🟢 Online' : '🔴 Offline'} · Auto ${auto ? '🟢 ON' : '🔴 OFF'}`,
+    );
+  });
+
+  const kbRows = [];
+  for (let i = 0; i < slice.length; i += 2) {
+    kbRows.push(slice.slice(i, i + 2).map(({ ex, ad }, j) => btn(`⚙️ ${page * MA_PER_PAGE + i + j + 1}. ${LABEL[ex]} ${sideVN(ad.side)} ${shortAdId(ad.id)}`, `ad:${ex}:${ad.id}`)));
+  }
+  if (pages > 1) {
+    kbRows.push([
+      btn(page > 0 ? '◀️ Trước' : '·', page > 0 ? `ma:${page - 1}` : 'noop'),
+      btn(`${page + 1}/${pages}`, 'noop'),
+      btn(page < pages - 1 ? 'Sau ▶️' : '·', page < pages - 1 ? `ma:${page + 1}` : 'noop'),
+    ]);
+  }
+  const opt = (dim, v, text) => btn(`${f[dim] === v ? '✔️' : ''}${text}`, `maf:${dim}:${v}`);
+  kbRows.push(
+    [btn('Trạng thái:', 'noop'), opt('st', 'on', 'Online'), opt('st', 'off', 'Offline'), opt('st', 'all', 'Tất cả')],
+    [btn('Chiều:', 'noop'), opt('sd', 'all', 'Tất cả'), opt('sd', 'BUY', 'MUA'), opt('sd', 'SELL', 'BÁN')],
+    [btn('Auto:', 'noop'), opt('au', 'on', 'Bật'), opt('au', 'off', 'Tắt'), opt('au', 'all', 'Tất cả')],
+    [opt('ex', 'all', 'Mọi sàn'), opt('ex', 'mexc', 'MEXC'), opt('ex', 'bybit', 'Bybit'), opt('ex', 'bitget', 'Bitget'), opt('ex', 'bingx', 'BingX')],
+    [btn('♻️ Đặt lại bộ lọc', 'mar'), btn('🔄 Làm mới', `ma:${page}:r`), ...backMain()],
+  );
+  return { text: lines.join('\n'), markup: kb(kbRows) };
+}
+
+// ══════════════════════════════════════════════════════════
+// ★ CẠNH TRANH TOP MARKET (Bybit / BingX / MEXC × MUA / BÁN, bật/tắt độc lập)
+// ══════════════════════════════════════════════════════════
+const CO_EXS = competition.EXS;
+const onOff = v => (v ? '🟢 ON' : '🔴 OFF');
+const signed = v => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${fmt(v, 2)}`);
+const boundaryName = side => (side === 'BUY' ? 'Trần giá MUA' : 'Sàn giá BÁN');
+const COMP_STATUS = {
+  'alert-sent': '⚠️ đã cảnh báo', active: '⚠️ vẫn vượt (đã báo)', cooldown: '⏳ vượt — chờ hết thời gian chờ', ignored: '🙈 đã bỏ qua',
+  resolved: '✅ đã hết vượt', ok: '✅ cạnh tranh', 'no-boundary': '— chưa đặt', 'no-competitor': '— không có đối thủ phù hợp',
+};
+const refLimitsLabel = c => (c.refLimitMin === null && c.refLimitMax === null ? 'Tất cả (không lọc)' : `${c.refLimitMin !== null ? fmt(c.refLimitMin) : '…'} – ${c.refLimitMax !== null ? fmt(c.refLimitMax) : '…'} VND`);
+
+function compOverviewScreen() {
+  const snap = competition.snapshot();
+  const lines = ['<b>📈 CẠNH TRANH TOP MARKET</b>', '<i>Cảnh báo khi trần MUA &lt; Best BUY hoặc sàn BÁN &gt; Best SELL của đối thủ. Không tự đổi giá.</i>',
+    '<i>Cập nhật mỗi lần Auto Pricing kiểm tra giá — không gọi API sàn riêng.</i>', ''];
+  for (const ex of CO_EXS) {
+    lines.push(`<b>${LABEL[ex].toUpperCase()}</b>${snap.exchanges[ex].BUY.connected ? '' : ' · ⚪ chưa kết nối'}`);
+    for (const side of ['BUY', 'SELL']) {
+      const s = snap.exchanges[ex][side];
+      const breaches = (s.ads || []).filter(a => a.breach).length;
+      const extra = !s.enabled ? '' : s.lastError && (!s.lastScanAt || s.lastErrorAt > s.lastScanAt) ? ` · ❌ ${esc(s.lastError).slice(0, 60)}`
+        : s.waiting && !s.lastScanAt ? ` · ⏳ ${s.engineRunning ? 'chờ Auto Pricing quét' : 'Auto Pricing dừng'}`
+        : s.best ? ` · Best ${fmt(s.best.price, 2)}${breaches ? ` · ⚠️ ${breaches} QC vượt` : ' · ✅'}${s.waiting ? ' · (dữ liệu cũ)' : ''}` : ' · không có đối thủ phù hợp';
+      lines.push(`${side === 'BUY' ? 'MUA' : 'BÁN'}: ${onOff(s.enabled)}${extra}`);
+    }
+    lines.push('');
+  }
+  lines.push(`Thời gian chờ giữa 2 cảnh báo: ${fmt(snap.cooldownMin)} phút · báo lại khi giá đối thủ đổi ≥ ${fmt(snap.minChangeVnd)} VND`);
+  const rows = CO_EXS.map(ex => ['BUY', 'SELL'].map(side => btn(`${snap.exchanges[ex][side].enabled ? '🟢' : '🔴'} ${LABEL[ex]} ${side === 'BUY' ? 'MUA' : 'BÁN'}`, `cs:${ex}:${side}`)));
+  rows.push([btn('🔄 Đánh giá lại', 'cor'), btn('⚙️ Thời gian chờ / ngưỡng', 'cog')], backMain());
+  return { text: lines.join('\n'), markup: kb(rows) };
+}
+
+function compSideScreen(ex, side, note = '') {
+  const s = competition.sideState(ex, side);
+  const isBuy = side === 'BUY';
+  const head = `<b>📈 ${LABEL[ex].toUpperCase()} — CẠNH TRANH ${isBuy ? 'MUA (BUY)' : 'BÁN (SELL)'}</b>`;
+  const lines = [head];
+  if (note) lines.push(note);
+  lines.push(
+    `Theo dõi: <b>${onOff(s.enabled)}</b>${s.engineRunning ? ' · Auto Pricing ▶️ đang chạy' : ' · Auto Pricing ⏸ dừng'}`,
+    `Giá tham chiếu: <b>${s.refPrice !== null ? `${fmt(s.refPrice, 2)} VND` : '—'}</b>`,
+    `Limit tham chiếu (giới hạn giao dịch): <b>${refLimitsLabel(s)}</b>`,
+    '',
+  );
+  if (!s.enabled) {
+    lines.push('<i>Đang tắt — không đánh giá, không cảnh báo. Cấu hình được giữ nguyên.</i>');
+  } else if (s.best) {
+    const b = s.best;
+    lines.push(
+      `Best ${isBuy ? 'BUY' : 'SELL'} đối thủ: <b>${fmt(b.price, 2)} VND</b> — ${esc(b.name)}`,
+      `   Limit ${fmt(b.min)}–${fmt(b.max)} VND · SL ${fmt(b.available, 2)} USDT${b.completion !== null ? ` · HT ${(b.completion * 100).toFixed(1)}%` : ''}`,
+      `   ${s.eligibleCount}/${s.totalCount} ads đủ điều kiện (đã bỏ ads của bạn + whitelist${ex === 'bybit' && store.section('bybit').onlineOnly !== false ? ' · chỉ online' : ''}${ex === 'bybit' && store.section('bybit').noNationalLimit !== false ? ' · bỏ ads giới hạn quốc gia' : ''})`,
+    );
+    if (s.refPrice !== null) lines.push(`Best so với giá tham chiếu: ${signed(s.refDiff)} VND`);
+  } else {
+    lines.push(s.lastScanAt ? `Best ${isBuy ? 'BUY' : 'SELL'} đối thủ: ${NO_MATCH}` : 'Chưa có dữ liệu market.');
+  }
+  if (s.enabled && s.lastError && (!s.lastScanAt || s.lastErrorAt > s.lastScanAt)) lines.push(`❌ Lượt quét gần nhất lỗi: ${esc(s.lastError)} — không so sánh trên dữ liệu cũ`);
+  if (s.enabled) {
+    lines.push('', `<b>${boundaryName(side)} của tôi</b> (QC đang bật Auto Repricing, online):`);
+    if (!s.ads.length) lines.push('—  không có quảng cáo nào');
+    s.ads.slice(0, 8).forEach(a => lines.push(`• #${esc(shortAdId(a.adId))}: ${a.boundary !== null ? `<b>${fmt(a.boundary, 2)}</b>` : '—'} · lệch ${signed(a.diff)} · ${COMP_STATUS[a.alertStatus] || esc(a.alertStatus)}`));
+    lines.push('', `Lần quét: ${s.lastScanAt ? `${timeVN(s.lastScanAt)} (${ago(s.lastScanAt)})` : '—'}`);
+    if (s.waiting) lines.push(`⏳ ${esc(s.waiting)}`);
+    lines.push('<i>Cập nhật mỗi lần Auto Pricing kiểm tra giá (không gọi API sàn riêng).</i>');
+  }
+  const rows = [
+    [btn(s.enabled ? '🔕 Tắt theo dõi' : '🔔 Bật theo dõi', `ct:${ex}:${side}`)],
+    [btn('✏️ Giá tham chiếu', `ce:${ex}:${side}:p`)],
+    [btn('✏️ Limit Min tham chiếu', `ce:${ex}:${side}:lo`), btn('✏️ Limit Max', `ce:${ex}:${side}:hi`)],
+  ];
+  if (s.enabled) {
+    rows.push([btn(`${isBuy ? '⬆️ Cập nhật trần MUA' : '⬇️ Cập nhật sàn BÁN'}`, `cu:${ex}:${side}`), btn('👁 Xem đối thủ', `cv:${ex}:${side}`)]);
+  }
+  rows.push([btn('🔄 Đánh giá lại', `cr:${ex}:${side}`), btn('⬅️ Quay lại', 'co'), ...backMain()]);
+  return { text: lines.join('\n'), markup: kb(rows) };
+}
+
+function compUpdateScreen(ex, side) {
+  const s = competition.sideState(ex, side);
+  const isBuy = side === 'BUY';
+  const back = [btn('⬅️ Quay lại', `cs:${ex}:${side}`), ...backMain()];
+  if (!s.best) return { text: `${boundaryName(side)}: chưa có Best ${side} đối thủ để so sánh — chờ lượt quét của Auto Pricing.`, markup: kb([back]) };
+  const cand = (s.ads || []).filter(a => a.boundary === null || a.boundary !== s.best.price);
+  const lines = [`<b>${isBuy ? '⬆️' : '⬇️'} ${LABEL[ex].toUpperCase()} — CẬP NHẬT ${boundaryName(side).toUpperCase()}</b>`,
+    `Best ${side} đối thủ: <b>${fmt(s.best.price, 2)} VND</b> (${esc(s.best.name)})`, '',
+    'Chọn quảng cáo để đặt giá trị mới bằng giá đối thủ (sẽ hỏi xác nhận):'];
+  if (!cand.length) lines.push('—  Không có quảng cáo nào cần cập nhật.');
+  const rows = cand.slice(0, 8).map(a => [btn(`#${shortAdId(a.adId)}: ${a.boundary !== null ? fmt(a.boundary) : '—'} → ${fmt(s.best.price)}`, `cb:${ex}:${side}:${a.adId}`)]);
+  rows.push(back);
+  return { text: lines.join('\n'), markup: kb(rows) };
+}
+
+function competitorLines(c, side) {
+  return [
+    `Thương nhân: <b>${esc(c.name)}</b> · mã QC <code>${esc(c.id)}</code>`,
+    `Giá: <b>${fmt(c.price, 2)} VND</b> (${side === 'BUY' ? 'merchant MUA USDT' : 'merchant BÁN USDT'})`,
+    `Limit: ${fmt(c.min)} – ${fmt(c.max)} VND`,
+    `SL khả dụng: ${fmt(c.available, 2)} USDT${c.completion !== null && c.completion !== undefined ? ` · Hoàn thành ${(c.completion * 100).toFixed(1)}%` : ''}`,
+    c.payments?.length ? `Thanh toán: ${esc(c.payments.join(', '))}` : '',
+  ].filter(Boolean);
+}
+
+function compCompetitorScreen(ex, side, c, { scanAt, back }) {
+  if (!c) return { text: 'Chưa có đối thủ phù hợp để xem.', markup: kb([[btn('⬅️ Quay lại', back), ...backMain()]]) };
+  return {
+    text: [`<b>👁 ${LABEL[ex].toUpperCase()} — ĐỐI THỦ DẪN ĐẦU ${side === 'BUY' ? 'MUA' : 'BÁN'}</b>`, ...competitorLines(c, side), '', `Dữ liệu quét lúc ${timeVN(scanAt)}`].join('\n'),
+    markup: kb([[btn('📄 Raw API JSON', `cj:${ex}:${side}:${c.id}`)], [btn('⬅️ Quay lại', back), ...backMain()]]),
+  };
+}
+
+function compGlobalScreen() {
+  const g = competition.config();
+  const cd = [1, 3, 5, 10, 15].map(v => btn(`${g.cooldownMin === v ? '✔️' : ''}${v}′`, `cgs:cd:${v}`));
+  const mc = [0, 10, 20, 50, 100].map(v => btn(`${g.minChangeVnd === v ? '✔️' : ''}${v}`, `cgs:mc:${v}`));
+  return {
+    text: ['<b>⚙️ CẢNH BÁO CẠNH TRANH — CHỐNG GỬI LẶP</b>', '',
+      `Thời gian chờ giữa 2 cảnh báo cùng QC: <b>${fmt(g.cooldownMin)} phút</b>`,
+      `Báo lại khi giá đối thủ đổi ≥ <b>${fmt(g.minChangeVnd)} VND</b> (lúc điều kiện vẫn đúng)`, '',
+      '<i>Luôn báo khi điều kiện vừa xuất hiện, hoặc hết rồi xuất hiện lại (sau thời gian chờ).</i>'].join('\n'),
+    markup: kb([[btn('Chờ (phút):', 'noop')], cd, [btn('Ngưỡng đổi giá (VND):', 'noop')], mc,
+      [btn('✍️ Nhập thời gian chờ', 'cgc:cd'), btn('✍️ Nhập ngưỡng', 'cgc:mc')], [btn('⬅️ Quay lại', 'co'), ...backMain()]]),
+  };
+}
+
+/** Gửi cảnh báo cạnh tranh tới Telegram */
+async function sendCompetitionAlert(a) {
+  const c = cfg();
+  if (!st.running || !st.client || !c.chatId) { competition.markDelivery(a.id, false, 'bot chưa chạy'); return; }
+  const isBuy = a.side === 'BUY';
+  const text = [
+    `⚠️ <b>${LABEL[a.ex].toUpperCase()} — CẢNH BÁO CẠNH TRANH ${isBuy ? 'MUA (BUY)' : 'BÁN (SELL)'}</b>`, '',
+    `Quảng cáo: ${isBuy ? 'MUA' : 'BÁN'} #${esc(a.adId)} · giá hiện tại ${a.adPrice !== null ? fmt(a.adPrice, 2) : '—'}`,
+    `${boundaryName(a.side)} của tôi: <b>${fmt(a.boundary, 2)} VND</b>`,
+    `Best ${a.side} đối thủ: <b>${fmt(a.best, 2)} VND</b> (${esc(a.competitor?.name)} · Limit ${fmt(a.competitor?.min)}–${fmt(a.competitor?.max)})`,
+    `Chênh lệch: <b>${signed(a.diff)} VND</b>`,
+    `Trạng thái: ${isBuy ? 'Trần giá thấp hơn giá dẫn đầu thị trường' : 'Sàn giá cao hơn giá dẫn đầu thị trường'}`,
+    `Auto Pricing ${LABEL[a.ex]}: ${a.engineRunning ? '▶️ đang chạy' : '⏸ đang dừng (đổi trần/sàn sẽ không tự đổi giá QC)'}`,
+    `<i>Quét lúc ${timeVN(a.scanAt)} · ${a.eligibleCount}/${a.totalCount} ads đủ điều kiện</i>`,
+  ].join('\n');
+  try {
+    await send(c.chatId, text, kb([
+      [btn(`${isBuy ? '⬆️ Đặt trần MUA' : '⬇️ Đặt sàn BÁN'} = ${fmt(a.best)}`, `ca:${a.id}:s`)],
+      [btn('👁 Xem đối thủ', `ca:${a.id}:v`), btn('🙈 Bỏ qua', `ca:${a.id}:i`)],
+      [btn(`🔕 Tắt theo dõi ${isBuy ? 'MUA' : 'BÁN'} ${LABEL[a.ex]}`, `ca:${a.id}:o`)],
+    ]));
+    competition.markDelivery(a.id, true);
+  } catch (err) {
+    competition.markDelivery(a.id, false, err.message);
+    logger.warn(`[Telegram] Không gửi được cảnh báo cạnh tranh: ${err.message}`);
+  }
+}
+bus.on('competitionAlert', a => { sendCompetitionAlert(a).catch(() => {}); });
+
+/** Hỏi xác nhận đặt trần MUA / sàn BÁN = giá đối thủ (qua đúng quy trình ops) */
+async function askBoundaryConfirm(chatId, ex, side, adId, value, back) {
+  const view = await ops.getAdView(ex, adId, { maxAgeMs: 5000 });
+  if (!view.ok) return send(chatId, `❌ ${esc(view.error)}`, kb([backMain()]));
+  if (view.ad.side !== side) return send(chatId, `❌ Quảng cáo #${esc(adId)} không phải ${side}.`, kb([backMain()]));
+  const param = side === 'BUY' ? 'ceiling' : 'floor';
+  const chk = ops.validate(view, param, value);
+  if (!chk.ok) {
+    return send(chatId, `⛔ <b>Không thể đặt ${esc(boundaryName(side))} = ${fmt(value, 2)}</b>\n${esc(chk.error)}\n\nGiá trị KHÔNG bị thay đổi.`, kb([[btn('⬅️ Cạnh tranh', `cs:${ex}:${side}`), ...backMain()]]));
+  }
+  const warns = [...chk.warnings];
+  if (!engine.statusOf(ex).running) warns.push(`Auto Pricing ${LABEL[ex]} đang dừng — chỉ lưu ${boundaryName(side).toLowerCase()}, KHÔNG đổi giá quảng cáo`);
+  else if (!view.values.enabled) warns.push('Auto Repricing của quảng cáo này đang tắt — chỉ lưu cấu hình, KHÔNG đổi giá quảng cáo');
+  return askConfirm(chatId, view, param, chk.value, warns, { back });
+}
+
+/** Gửi Raw API JSON của 1 ad đối thủ thành file */
+async function sendRawJson(chatId, ex, side, adId, { refresh = false } = {}) {
+  const r = await market.rawAd(ex, side, adId, { refresh, cfgSection: store.section(ex) });
+  if (!r.ok) {
+    const lines = [`❌ ${esc(r.error)}`];
+    if (r.cached) lines.push('', `<i>Có bản cache lúc ${esc(r.cached.responseTimestamp)} (${r.cached.ageSeconds}s trước) — KHÔNG phải dữ liệu mới. Gửi bản cache?</i>`);
+    const rows = [[btn('🔄 Thử lấy mới', `cjr:${ex}:${side}:${adId}`)]];
+    if (r.cached) rows.push([btn('📄 Gửi bản cache', `cj:${ex}:${side}:${adId}`)]);
+    rows.push(backMain());
+    return send(chatId, lines.join('\n'), kb(rows));
+  }
+  const d = r.data;
+  const name = `${d.exchange}-${side}-${String(adId).slice(-12)}-${d.source}.json`;
+  const caption = `📄 <b>Raw API JSON — ${esc(d.exchange)} ${side}</b> #${esc(adId)}\n${esc(d.endpoint || '—')} · HTTP ${d.httpStatus ?? '—'} · ${d.durationMs ?? '—'}ms\n${d.source === 'fresh' ? '🆕 Vừa lấy từ sàn' : `🗂 Bản cache (${d.ageSeconds}s trước)`} · ${esc(d.responseTimestamp)}`;
+  try {
+    await st.client.sendDocument(chatId, name, JSON.stringify(d, null, 2), { caption });
+  } catch (err) {
+    return send(chatId, `❌ Không gửi được file: ${esc(err.message)}`, kb([backMain()]));
+  }
+  return send(chatId, 'Tùy chọn:', kb([[btn('🔄 Lấy mới từ sàn', `cjr:${ex}:${side}:${adId}`)], backMain()]));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -701,6 +975,29 @@ async function onMessage(m) {
     market.setMinQty(ex, v, { source: 'telegram' });
     const s = await marketScreen(ex, side, 0);
     return send(chatId, s.text, s.markup);
+  }
+  if (sess.awaiting?.type === 'compRef') {
+    const { ex, side, field } = sess.awaiting;
+    const clear = /^(xoa|xóa|-|none|clear|0)$/i.test(text.trim());
+    const v = clear ? null : parseUserNumber(text);
+    if (!clear && (v === null || v < 0)) return send(chatId, '⚠️ Hãy gõ một số VND (vd 26,150 · 2tr · 500k), hoặc <code>xoa</code> để bỏ. Bấm Hủy để thôi.', kb([[btn('❌ Hủy', 'cx')]]));
+    try {
+      competition.setSideConfig(ex, side, { [field]: v === null ? null : (field === 'refPrice' ? v : Math.round(v)) }, { source: 'telegram' });
+    } catch (err) {
+      return send(chatId, `⛔ ${esc(err.message)}\nNhập lại hoặc bấm Hủy.`, kb([[btn('❌ Hủy', 'cx')]]));
+    }
+    sess.awaiting = null;
+    const sc = compSideScreen(ex, side, '✅ Đã lưu.');
+    return send(chatId, sc.text, sc.markup);
+  }
+  if (sess.awaiting?.type === 'compGlobal') {
+    const v = parseUserNumber(text);
+    if (v === null || v < 0) return send(chatId, '⚠️ Hãy gõ một số ≥ 0 hoặc bấm Hủy.', kb([[btn('❌ Hủy', 'cx')]]));
+    try { competition.setGlobal({ [sess.awaiting.field]: v }, { source: 'telegram' }); }
+    catch (err) { return send(chatId, `⛔ ${esc(err.message)}`, kb([[btn('❌ Hủy', 'cx')]])); }
+    sess.awaiting = null;
+    const sc = compGlobalScreen();
+    return send(chatId, `✅ Đã lưu.\n\n${sc.text}`, sc.markup);
   }
   if (sess.awaiting?.type === 'bestLimitMin') {
     const v = parseUserNumber(text);
@@ -784,6 +1081,7 @@ async function onCallback(q) {
       const op = pending.get(a1); pending.delete(a1);
       const backRow = !op ? backMain()
         : op.kind === 'engine' ? [btn('⬅️ Auto Pricing', op.target === 'all' ? 'ap' : `ape:${op.target}`), ...backMain()]
+        : String(op.back || '').startsWith('cs:') ? [btn('⬅️ Cạnh tranh', op.back), ...backMain()]
         : [btn('⬅️ Về quảng cáo', `ad:${op.ex}:${op.adId}`), ...backMain()];
       return edit(msg, '❎ Đã hủy — không có thay đổi nào.', kb([backRow]));
     }
@@ -815,6 +1113,70 @@ async function onCallback(q) {
     case 'bs': return show(await bestDetailScreen(a1, a2));
     case 'bsr': return show(await bestDetailScreen(a1, a2, { maxAgeMs: 3000 }));
     case 'rf': await edit(msg, '⏳ Đang làm mới...'); return show(await refreshScreen(a1));
+    // ── Quảng cáo của tôi — gộp mọi sàn ──
+    case 'ma':
+      if (a1 !== 'p' && a2 !== 'r') await edit(msg, '⏳ Đang tải quảng cáo từ các sàn...').catch(() => {});
+      return show(await myAllScreen(sess, a1 === 'p' ? (sess.maPage || 0) : Number(a1) || 0, { maxAgeMs: a2 === 'r' ? 0 : 15000 }));
+    case 'maf': {
+      const f = maFilterOf(sess);
+      if (MA_LABEL[a1] && a2 in MA_LABEL[a1]) f[a1] = a2;
+      sess.ma = f;
+      return show(await myAllScreen(sess, 0));
+    }
+    case 'mar': sess.ma = { ...MA_DEFAULT }; return show(await myAllScreen(sess, 0));
+    // ── Cạnh tranh top market ──
+    case 'co': return show(compOverviewScreen());
+    case 'cor': await competition.refresh(null, null); return show(compOverviewScreen());
+    case 'cog': return show(compGlobalScreen());
+    case 'cgs':
+      try { competition.setGlobal({ [a1 === 'cd' ? 'cooldownMin' : 'minChangeVnd']: Number(a2) }, { source: 'telegram' }); }
+      catch (err) { return send(chatId, `⛔ ${esc(err.message)}`); }
+      return show(compGlobalScreen());
+    case 'cgc':
+      sess.awaiting = { type: 'compGlobal', field: a1 === 'cd' ? 'cooldownMin' : 'minChangeVnd', at: Date.now() };
+      return send(chatId, a1 === 'cd' ? '✍️ Gõ thời gian chờ (phút), vd 5' : '✍️ Gõ ngưỡng đổi giá (VND), vd 20', kb([[btn('❌ Hủy', 'cx')]]));
+    case 'cs': if (!CO_EXS.includes(a1)) return show(compOverviewScreen()); return show(compSideScreen(a1, a2));
+    case 'ct': {
+      const cur = competition.sideState(a1, a2);
+      try { competition.setSideConfig(a1, a2, { enabled: !cur.enabled }, { source: 'telegram' }); }
+      catch (err) { return show(compSideScreen(a1, a2, `⛔ ${esc(err.message)}`)); }
+      if (!cur.enabled) await competition.refresh(a1, a2);
+      return show(compSideScreen(a1, a2, !cur.enabled ? '🔔 Đã BẬT theo dõi.' : '🔕 Đã TẮT theo dõi (giữ nguyên cấu hình, không ảnh hưởng Auto Pricing).'));
+    }
+    case 'ce': {
+      const field = { p: 'refPrice', lo: 'refLimitMin', hi: 'refLimitMax' }[a3];
+      if (!field) return;
+      sess.awaiting = { type: 'compRef', ex: a1, side: a2, field, at: Date.now() };
+      const hint = { refPrice: 'Giá tham chiếu (VND/USDT), phải nằm trong khoảng sàn–trần giá đang cấu hình của chiều này.',
+        refLimitMin: 'Limit Min tham chiếu (VND) — chỉ so với ads đối thủ có giới hạn giao dịch giao với khoảng tham chiếu.',
+        refLimitMax: 'Limit Max tham chiếu (VND) — chỉ so với ads đối thủ có giới hạn giao dịch giao với khoảng tham chiếu.' }[field];
+      return send(chatId, `✍️ ${esc(hint)}\nGõ số (vd ${field === 'refPrice' ? '26,150' : '1,000,000 · 2tr'}) hoặc <code>xoa</code> để bỏ.`, kb([[btn('❌ Hủy', 'cx')]]));
+    }
+    case 'cu': return show(compUpdateScreen(a1, a2));
+    case 'cb': {
+      const s2 = competition.sideState(a1, a2);
+      if (!s2.best) return show(compSideScreen(a1, a2, '⚠️ Chưa có giá đối thủ — chờ lượt quét của Auto Pricing.'));
+      return askBoundaryConfirm(chatId, a1, a2, a3, s2.best.price, `cs:${a1}:${a2}`);
+    }
+    case 'cv': { const s2 = competition.sideState(a1, a2); return show(compCompetitorScreen(a1, a2, s2.best, { scanAt: s2.lastScanAt, back: `cs:${a1}:${a2}` })); }
+    case 'cr': await competition.refresh(a1, a2); return show(compSideScreen(a1, a2));
+    case 'cj': return sendRawJson(chatId, a1, a2, parts.slice(3).join(':'));
+    case 'cjr': await send(chatId, '⏳ Đang lấy mới từ sàn...'); return sendRawJson(chatId, a1, a2, parts.slice(3).join(':'), { refresh: true });
+    case 'ca': {
+      const al = competition.getAlert(a1);
+      if (!al) return edit(msg, `${msg.text ? esc(msg.text) + '\n\n' : ''}⌛ Cảnh báo đã quá cũ — mở Cạnh tranh top market để xem trạng thái mới.`, kb([[btn('📈 Cạnh tranh', 'co'), ...backMain()]]));
+      if (a2 === 's') return askBoundaryConfirm(chatId, al.ex, al.side, al.adId, al.best, `cs:${al.ex}:${al.side}`);
+      if (a2 === 'v') return send(chatId, compCompetitorScreen(al.ex, al.side, al.competitor, { scanAt: al.scanAt, back: `cs:${al.ex}:${al.side}` }).text, compCompetitorScreen(al.ex, al.side, al.competitor, { scanAt: al.scanAt, back: `cs:${al.ex}:${al.side}` }).markup);
+      if (a2 === 'i') {
+        competition.ignore(a1, { source: 'telegram' });
+        return edit(msg, `${esc(msg.text || '')}\n\n🙈 <b>Đã bỏ qua</b> — chỉ báo lại khi giá đối thủ đổi ≥ ngưỡng, hoặc điều kiện hết rồi xuất hiện lại.`, kb([[btn('📈 Cạnh tranh', `cs:${al.ex}:${al.side}`), ...backMain()]]));
+      }
+      if (a2 === 'o') {
+        competition.setSideConfig(al.ex, al.side, { enabled: false }, { source: 'telegram' });
+        return edit(msg, `${esc(msg.text || '')}\n\n🔕 <b>Đã tắt theo dõi ${al.side === 'BUY' ? 'MUA' : 'BÁN'} ${LABEL[al.ex]}</b> (Auto Pricing không bị ảnh hưởng).`, kb([[btn(`🔔 Bật lại`, `ct:${al.ex}:${al.side}`), ...backMain()]]));
+      }
+      return;
+    }
     default: return show(mainMenu());
   }
 }

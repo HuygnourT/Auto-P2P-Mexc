@@ -3,6 +3,7 @@ const { buildSignedQuery, generateSignature } = require('../utils/crypto');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { getSettings } = require('./settings');
+const httpTrace = require('../core/httpTrace');
 const { encodeMexcText, DEFAULT_AUTO_REPLY, DEFAULT_TRADE_TERMS } = require('../utils/mexcText');
 
 /**
@@ -83,8 +84,17 @@ class MexcP2PService {
     }
 
     const signedQuery = buildSignedQuery(cleanParams, this.secretKey);
-    const response = await this.client.get(`/api/v3/fiat/market/ads/pagination?${signedQuery}`);
-    return response.data;
+    const endpoint = '/api/v3/fiat/market/ads/pagination';
+    const startedAt = Date.now();
+    try {
+      const response = await this.client.get(`${endpoint}?${signedQuery}`);
+      // Debug Raw API JSON: chỉ ghi khi đang trong một lần quét market (không ghi signature/header)
+      httpTrace.record({ exchange: 'mexc', method: 'GET', endpoint, params: cleanParams, httpStatus: response.status, startedAt, body: response.data });
+      return response.data;
+    } catch (err) {
+      httpTrace.record({ exchange: 'mexc', method: 'GET', endpoint, params: cleanParams, httpStatus: err.response?.status ?? null, startedAt, body: err.response?.data ?? null, error: err.message });
+      throw err;
+    }
   }
 
   /**

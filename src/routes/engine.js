@@ -11,6 +11,7 @@ const market = require('../core/market');
 const adapters = require('../core/adapters');
 const audit = require('../core/audit');
 const ops = require('../core/ops');
+const competition = require('../core/competition');
 const { num } = require('../core/util');
 
 const EXS = adapters.EXCHANGES;
@@ -195,6 +196,72 @@ router.post('/market/best-filters/:ex', (req, res) => {
   const ex = exParam(req, res); if (!ex) return;
   try { res.json({ code: 0, data: market.setLimitMin(ex, req.body?.limitMin, { source: 'web', client: clientOf(req) }) }); }
   catch (e) { res.status(400).json({ code: -1, msg: e.message }); }
+});
+
+// ── Debug Raw API JSON của ads đối thủ (MEXC / Bybit / BingX) ──
+// Chỉ cho truy cập từ chính máy chạy tool (localhost). Muốn mở cho máy khác trong mạng: đặt RAW_JSON_ALLOW_REMOTE=1.
+function localOnly(req, res, next) {
+  const ip = String(req.socket?.remoteAddress || '');
+  const local = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  if (local || process.env.RAW_JSON_ALLOW_REMOTE === '1') return next();
+  res.status(403).json({ code: 403, msg: 'Raw API JSON chỉ xem được trên máy chạy tool (localhost)' });
+}
+router.get('/market/raw', localOnly, async (req, res) => {
+  const { ex, side, adId } = req.query;
+  if (!EXS.includes(ex) || !adId) return res.status(400).json({ code: -1, msg: 'Thiếu ex / side / adId' });
+  const r = await market.rawAd(ex, side, adId, { refresh: req.query.refresh === '1', cfgSection: store.section(ex) });
+  if (!r.ok) return res.json({ code: -1, msg: r.error, data: { refreshError: r.refreshError || null, cached: r.cached || null } });
+  res.json({ code: 0, data: r.data });
+});
+router.get('/market/raw/response', localOnly, (req, res) => {
+  const r = market.rawResponse(req.query.snap, req.query.call);
+  if (!r.ok) return res.status(404).json({ code: -1, msg: r.error });
+  if (req.query.format === 'text') {
+    if (r.rawText === null) return res.status(404).json({ code: -1, msg: 'Sàn này không lưu body HTTP dạng văn bản — xem bản JSON' });
+    res.type('text/plain; charset=utf-8');
+    if (req.query.download === '1') res.attachment(`${r.data.exchange}-${r.data.side}-${r.data.snapshotId}-req${r.data.callIndex + 1}.txt`);
+    return res.send(r.rawText);
+  }
+  if (req.query.download === '1') {
+    res.attachment(`${r.data.exchange}-${r.data.side}-${r.data.snapshotId}-req${r.data.callIndex + 1}.json`);
+    res.type('application/json; charset=utf-8');
+    return res.send(JSON.stringify(r.data, null, 2));
+  }
+  res.json({ code: 0, data: r.data, hasRawText: r.rawText !== null });
+});
+router.get('/market/debug-log', localOnly, (req, res) => {
+  const ex = req.query.ex && EXS.includes(req.query.ex) ? req.query.ex : null;
+  res.json({ code: 0, data: market.debugEntries({ ex, limit: parseInt(req.query.limit) || 100 }) });
+});
+
+// ── Top-of-Market Competition (dùng chung với Telegram) ──
+router.get('/competition', (_req, res) => res.json({ code: 0, data: competition.snapshot() }));
+router.get('/competition/history', (req, res) => res.json({ code: 0, data: competition.recentHistory(parseInt(req.query.limit) || 100) }));
+router.post('/competition/config/:ex/:side', (req, res) => {
+  try {
+    const d = competition.setSideConfig(req.params.ex, req.params.side, req.body || {}, { source: 'web', client: clientOf(req) });
+    res.json({ code: 0, data: d });
+  } catch (e) { res.status(400).json({ code: -1, msg: e.message }); }
+});
+router.post('/competition/settings', (req, res) => {
+  try { res.json({ code: 0, data: competition.setGlobal(req.body || {}, { source: 'web', client: clientOf(req) }) }); }
+  catch (e) { res.status(400).json({ code: -1, msg: e.message }); }
+});
+router.post('/competition/refresh', async (req, res) => {
+  const { ex, side } = req.body || {};
+  res.json({ code: 0, data: await competition.refresh(ex || null, side || null) });
+});
+// Cập nhật trần MUA / sàn BÁN theo giá đối thủ — web đã hỏi xác nhận trước khi gọi.
+// Đi qua đúng quy trình ops.apply (kiểm tra sàn ≤ trần, lưu, đồng bộ, tính lại giá; chỉ đổi giá thật khi Auto Pricing đang chạy).
+router.post('/competition/apply', async (req, res) => {
+  const { ex, side, adId, value, confirmed } = req.body || {};
+  if (!competition.EXS.includes(ex) || !['BUY', 'SELL'].includes(side) || !adId) return res.status(400).json({ code: -1, msg: 'Thiếu ex / side / adId' });
+  if (confirmed !== true) return res.status(400).json({ code: -1, msg: 'Cần xác nhận trước khi đổi trần/sàn giá' });
+  const ad = engine.getMyAds(ex).find(x => x.id === String(adId));
+  if (ad && ad.side !== side) return res.status(400).json({ code: -1, msg: `Quảng cáo #${adId} là ${ad.side}, không phải ${side}` });
+  const param = side === 'BUY' ? 'ceiling' : 'floor';
+  const r = await ops.apply(ex, adId, param, value, { source: 'web', client: clientOf(req) });
+  res.json({ code: r.ok ? 0 : -1, msg: r.msg, data: r });
 });
 
 router.get('/audit', (req, res) => {

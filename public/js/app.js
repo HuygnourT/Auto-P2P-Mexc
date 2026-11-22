@@ -978,6 +978,7 @@ function renderBybitAds() {
     await pushGlobalSettings('bybit', {
       scanInterval: document.getElementById('byScanInterval').value,
       onlineOnly: document.getElementById('byOnlineOnly')?.checked ?? true,
+      noNationalLimit: document.getElementById('byNoNationalLimit')?.checked ?? true,
     });
     autosavedToast();
   }
@@ -1229,7 +1230,7 @@ function renderBybitAds() {
     const open = state.myAds.filter(a => (a.advStatus || '').toUpperCase() === 'OPEN').length;
     const closed = state.myAds.filter(a => (a.advStatus || '').toUpperCase() === 'CLOSE').length;
 
-    const chips = document.querySelectorAll('.filter-chip');
+    const chips = document.querySelectorAll('.filter-chip[data-filter]');   // chỉ chip lọc ads của tôi (không đụng chip khác)
     chips.forEach(chip => {
       const filter = chip.dataset.filter;
       const count = filter === 'ALL' ? all : filter === 'OPEN' ? open : closed;
@@ -1950,8 +1951,9 @@ function renderBybitAds() {
   EXCHANGES.forEach(ex => { exStatus[ex] = { lastCycle: null, updates: 0, lastMsg: '', lastType: '', lastAt: null }; });
 
   function switchExchange(ex) {
-    if (!EXCHANGES.includes(ex) && ex !== 'telegram') ex = 'mexc';
+    if (!EXCHANGES.includes(ex) && ex !== 'telegram' && ex !== 'competition') ex = 'mexc';
     if (ex === 'telegram') { loadTelegram(); loadAudit(); }
+    else if (ex === 'competition') { coLoad(); dbgLoad(); }
     else if (!state.mk[ex]?.loadedAt || Date.now() - state.mk[ex].loadedAt > 60000) setTimeout(() => mkLoad(ex), 0);
     document.querySelectorAll('.ex-tab').forEach(b => b.classList.toggle('active', b.dataset.ex === ex));
     document.querySelectorAll('.ex-panel').forEach(p => p.classList.toggle('active', p.dataset.ex === ex));
@@ -2345,7 +2347,7 @@ function renderBybitAds() {
     if (!s) return;
     if (ex === 'mexc') setInput('apScanInterval', s.scanInterval);
     if (ex === 'bitget') { setInput('bgScanInterval', s.scanInterval); setInput('bgOffsetBuy', s.offsetBuy); setInput('bgOffsetSell', s.offsetSell); }
-    if (ex === 'bybit') { setInput('byScanInterval', s.scanInterval); setInput('byOnlineOnly', s.onlineOnly !== false, true); }
+    if (ex === 'bybit') { setInput('byScanInterval', s.scanInterval); setInput('byOnlineOnly', s.onlineOnly !== false, true); setInput('byNoNationalLimit', s.noNationalLimit !== false, true); }
     if (ex === 'bingx') { setInput('bxScanInterval', s.scanInterval); setInput('bxMarketPages', s.marketPages); }
   }
   function applyEngineState(ex, d) {
@@ -2410,6 +2412,7 @@ function renderBybitAds() {
     bind('bgOffsetSell', 'bitget', 'offsetSell');
     bind('byScanInterval', 'bybit', 'scanInterval');
     bind('byOnlineOnly', 'bybit', 'onlineOnly', el => el.checked);
+    bind('byNoNationalLimit', 'bybit', 'noNationalLimit', el => el.checked);
     bind('bxScanInterval', 'bingx', 'scanInterval');
     bind('bxMarketPages', 'bingx', 'marketPages');
   }
@@ -2496,7 +2499,9 @@ function renderBybitAds() {
     if (!window.EventSource) return;
     evtSource = new EventSource('/api/events');
     const on = (name, fn) => evtSource.addEventListener(name, e => { try { fn(JSON.parse(e.data)); } catch (err) { console.error('[SSE]', name, err); } });
-    on('hello', () => { loadEngineState(); loadTelegram(); loadMarketFilters(); });   // (kết nối lại) → nạp lại toàn bộ trạng thái
+    on('hello', () => { loadEngineState(); loadTelegram(); loadMarketFilters(); coLoad(); });
+    on('competition', onCompetitionEvent);
+    on('competitionAlert', onCompetitionAlert);   // (kết nối lại) → nạp lại toàn bộ trạng thái
     on('engine', st => { state.engine[st.ex] = st; renderEngineUI(st.ex); });
     on('log', e => { if (ENGINE_UI[e.ex]) appendLog(e.ex, e.msg, e.type, e.at); });
     on('rowStatus', onRowStatus);
@@ -2574,13 +2579,13 @@ function renderBybitAds() {
     try {
       const r = await api.get(`/api/market/list?ex=${ex}&side=${mk.side}&minQty=${minQty}${fresh ? '&fresh=1' : ''}`);
       if (r.code !== 0) {
-        body.innerHTML = `<tr class="empty-row"><td colspan="7"><div class="empty-state"><p>${escapeHtml(r.msg || 'Không lấy được market')}</p></div></td></tr>`;
+        body.innerHTML = `<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>${escapeHtml(r.msg || 'Không lấy được market')}</p></div></td></tr>`;
         if (info) info.textContent = '';
         return;
       }
       const d = r.data;
       if (info) info.textContent = `${d.items.length}/${d.total} ads · ${timeVN(d.at)}${d.cached ? ' (cache)' : ''} · ${mk.side === 'BUY' ? 'giá cao → thấp' : 'giá thấp → cao'}`;
-      if (!d.items.length) { body.innerHTML = '<tr class="empty-row"><td colspan="7"><div class="empty-state"><p>Không có ads khớp bộ lọc</p></div></td></tr>'; return; }
+      if (!d.items.length) { body.innerHTML = '<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Không có ads khớp bộ lọc</p></div></td></tr>'; return; }
       body.innerHTML = d.items.slice(0, 30).map((m, i) => `<tr>
         <td class="mono-cell text-muted">${i + 1}</td>
         <td>${escapeHtml(m.name)}</td>
@@ -2589,9 +2594,10 @@ function renderBybitAds() {
         <td class="mono-cell">${formatNumber(m.min)} – ${formatNumber(m.max)}</td>
         <td><span class="payment-badge">${escapeHtml((m.payments || []).slice(0, 3).join(', ') || '—')}</span></td>
         <td class="mono-cell">${m.completion !== null && m.completion !== undefined ? (m.completion * 100).toFixed(1) + '%' : '—'}</td>
+        <td>${RAW_EXS.includes(ex) ? `<button class="btn-mini" onclick="App.rawOpen('${ex}','${mk.side}','${escAttr(m.id)}')" title="Xem Raw API JSON của quảng cáo này">{ } JSON</button>` : '<span class="text-muted" title="Chưa hỗ trợ cho Bitget">—</span>'}</td>
       </tr>`).join('');
     } catch (err) {
-      body.innerHTML = `<tr class="empty-row"><td colspan="7"><div class="empty-state"><p>${escapeHtml(err.message)}</p></div></td></tr>`;
+      body.innerHTML = `<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>${escapeHtml(err.message)}</p></div></td></tr>`;
     }
   }
 
@@ -2615,6 +2621,344 @@ function renderBybitAds() {
       if (state.mk[ev.ex]?.loadedAt) mkLoad(ev.ex);
       if (ev.source === 'telegram') showToast(`${EX_LABEL[ev.ex]}: bộ lọc SL tối thiểu = ${formatNumber(ev.minQty)} USDT (từ Telegram)`, 'info');
     }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ★ RAW API JSON — ads đối thủ (MEXC / Bybit / BingX)
+  // ═══════════════════════════════════════════════════════
+  const RAW_EXS = ['mexc', 'bybit', 'bingx'];
+  const escAttr = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+  const raw = { ex: null, side: null, adId: null, data: null, view: 'ad', response: null, text: null, lastFocus: null };
+
+  async function rawOpen(ex, side, adId) {
+    raw.ex = ex; raw.side = side; raw.adId = String(adId); raw.data = null; raw.response = null; raw.text = null; raw.view = 'ad';
+    raw.lastFocus = document.activeElement;
+    const ov = document.getElementById('rjOverlay');
+    ov.hidden = false;
+    document.addEventListener('keydown', rawKey);
+    ov.querySelector('.rj-head button')?.focus();
+    await rawLoad(false);
+  }
+  function rawKey(e) { if (e.key === 'Escape') rawClose(); }
+  function rawClose() {
+    document.getElementById('rjOverlay').hidden = true;
+    document.removeEventListener('keydown', rawKey);
+    try { raw.lastFocus?.focus(); } catch (_) {}
+  }
+  async function rawLoad(refresh) {
+    const body = document.getElementById('rjBody'), banner = document.getElementById('rjBanner');
+    document.getElementById('rjTitle').textContent = `Raw API JSON — ${EX_LABEL[raw.ex]} ${raw.side} #${raw.adId}`;
+    body.innerHTML = `<p class="text-muted">${refresh ? 'Đang lấy mới từ sàn...' : 'Đang tải...'}</p>`;
+    banner.hidden = true;
+    let r;
+    try { r = await api.get(`/api/market/raw?ex=${raw.ex}&side=${raw.side}&adId=${encodeURIComponent(raw.adId)}${refresh ? '&refresh=1' : ''}`); }
+    catch (err) { r = { code: -1, msg: err.message }; }
+    raw.response = null; raw.text = null;
+    if (r.code !== 0) {
+      // KHÔNG âm thầm thay bằng cache: báo lỗi rõ ràng; nếu có bản cache thì hiển thị kèm nhãn
+      banner.hidden = false; banner.className = 'rj-banner error';
+      const fail = r.data?.refreshError;
+      banner.innerHTML = `❌ ${escapeHtml(r.msg || 'Lỗi')}${fail ? `<br><span class="text-muted">${escapeHtml(fail.endpoint || '')} · HTTP ${fail.httpStatus ?? '—'} · ${escapeHtml(fail.at || '')}</span>` : ''}${r.data?.cached ? '<br>⚠️ Bên dưới là <b>bản cache cũ</b>, không phải dữ liệu mới.' : ''}`;
+      raw.data = r.data?.cached || null;
+      if (!raw.data) { body.innerHTML = ''; document.getElementById('rjMeta').innerHTML = ''; return; }
+    } else {
+      raw.data = r.data;
+      banner.hidden = false;
+      banner.className = 'rj-banner ' + (raw.data.source === 'fresh' ? 'ok' : 'info');
+      banner.textContent = raw.data.source === 'fresh' ? '🆕 Dữ liệu vừa lấy từ sàn' : `🗂 Bản cache của lượt quét trước (${raw.data.ageSeconds}s trước) — bấm "Lấy mới từ sàn" để gọi lại API`;
+    }
+    rawMeta();
+    rawView(raw.view);
+  }
+  function rawMeta() {
+    const d = raw.data;
+    const rows = [
+      ['Sàn', d.exchange], ['Mã quảng cáo', d.advertisementId], ['Chiều', d.side],
+      ['Endpoint', d.endpoint || '—'], ['Request lúc', d.requestTimestamp || '—'], ['Response lúc', d.responseTimestamp || '—'],
+      ['HTTP', d.httpStatus ?? '—'], ['Thời gian request', d.durationMs !== null && d.durationMs !== undefined ? `${d.durationMs} ms` : '—'],
+      ['Nguồn', d.source === 'fresh' ? 'Mới (vừa gọi API)' : `Cache (${d.ageSeconds}s trước)`],
+      ['Vị trí trong response', d.location?.note || '—'],
+      ['Tham số request', d.requestParams ? JSON.stringify(d.requestParams) : '—'],
+    ];
+    document.getElementById('rjMeta').innerHTML = rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd></div>`).join('');
+  }
+  async function rawView(view) {
+    raw.view = view;
+    document.querySelectorAll('#rjOverlay .rj-views .filter-chip').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    const body = document.getElementById('rjBody');
+    if (!raw.data) return;
+    if (view === 'ad') return renderTree(body, raw.data.rawAdvertisement, 'rawAdvertisement');
+    if (view === 'parsed') return renderTree(body, raw.data.parsedAdvertisement, 'parsedAdvertisement');
+    if (!raw.data.location) { body.innerHTML = '<p class="text-muted">Không có response gốc cho lượt quét này.</p>'; return; }
+    const q = `snap=${encodeURIComponent(raw.data.snapshotId)}&call=${raw.data.location.callIndex}`;
+    if (view === 'response') {
+      if (!raw.response) {
+        body.innerHTML = '<p class="text-muted">Đang tải response...</p>';
+        const r = await api.get(`/api/market/raw/response?${q}`).catch(err => ({ code: -1, msg: err.message }));
+        if (r.code !== 0) { body.innerHTML = `<p class="text-muted">${escapeHtml(r.msg)}</p>`; return; }
+        raw.response = r.data; raw.hasText = r.hasRawText;
+      }
+      if (raw.view !== 'response') return;
+      const size = JSON.stringify(raw.response).length;
+      body.innerHTML = '';
+      if (size > 400000) body.insertAdjacentHTML('beforeend', `<p class="rj-note">Response lớn (${(size / 1024).toFixed(0)} KB) — dùng "Tải về" để xem toàn bộ thoải mái hơn.</p>`);
+      const holder = document.createElement('div'); body.appendChild(holder);
+      return renderTree(holder, raw.response, 'response', `response.${raw.data.location.jsonPath}`);   // vị trí QC trong body gốc
+    }
+    if (view === 'text') {
+      if (raw.text === null) {
+        body.innerHTML = '<p class="text-muted">Đang tải body HTTP...</p>';
+        const res = await fetch(`/api/market/raw/response?${q}&format=text`);
+        if (!res.ok) { const j = await res.json().catch(() => ({})); body.innerHTML = `<p class="text-muted">${escapeHtml(j.msg || 'Không có body thô')}</p>`; return; }
+        raw.text = await res.text();
+      }
+      if (raw.view !== 'text') return;
+      body.innerHTML = `<pre class="rj-pre">${escapeHtml(raw.text.length > 300000 ? raw.text.slice(0, 300000) + '\n… (đã cắt — dùng Tải về để xem đủ)' : raw.text)}</pre>`;
+    }
+  }
+  function rawCurrent() {
+    if (!raw.data) return null;
+    if (raw.view === 'response') return raw.response ? JSON.stringify(raw.response, null, 2) : null;
+    if (raw.view === 'text') return raw.text;
+    if (raw.view === 'parsed') return JSON.stringify(raw.data.parsedAdvertisement, null, 2);
+    return JSON.stringify(raw.data, null, 2);    // gói debug đầy đủ: thông tin request + rawAdvertisement
+  }
+  async function rawCopy() {
+    const t = rawCurrent();
+    if (!t) return showToast('Chưa có dữ liệu để copy', 'error');
+    try { await navigator.clipboard.writeText(t); }
+    catch (_) {
+      const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (__) {}
+      ta.remove();
+    }
+    showToast('Đã copy JSON', 'success');
+  }
+  function rawDownload() {
+    if (!raw.data) return;
+    if ((raw.view === 'response' || raw.view === 'text') && raw.data.location) {
+      const a = document.createElement('a');
+      a.href = `/api/market/raw/response?snap=${encodeURIComponent(raw.data.snapshotId)}&call=${raw.data.location.callIndex}&download=1${raw.view === 'text' ? '&format=text' : ''}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    const t = rawCurrent();
+    const blob = new Blob([t], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${raw.data.exchange}-${raw.side}-${raw.adId}-${raw.view === 'parsed' ? 'parsed' : 'raw'}-${raw.data.source}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  function rawRefresh() { return rawLoad(true); }
+
+  /** Cây JSON thu gọn/mở rộng — con chỉ được dựng khi mở (nhẹ với response lớn) */
+  function renderTree(container, value, rootKey, highlightPath) {
+    container.innerHTML = '';
+    const tree = document.createElement('div'); tree.className = 'jt';
+    const openPath = highlightPath ? parsePath(highlightPath) : null;
+    tree.appendChild(jtNode(rootKey, value, 0, openPath, []));
+    container.appendChild(tree);
+    const hl = container.querySelector('.jt-hl');
+    if (hl) hl.scrollIntoView({ block: 'center' });
+  }
+  function parsePath(p) {
+    const out = [];
+    String(p).replace(/([^.[\]]+)|\[(\d+)\]/g, (_, k, i) => { out.push(i !== undefined ? Number(i) : k); return ''; });
+    return out;
+  }
+  function jtLeaf(v) {
+    const span = document.createElement('span');
+    if (v === null) { span.className = 'jt-null'; span.textContent = 'null'; }
+    else if (typeof v === 'string') { span.className = 'jt-str'; span.textContent = JSON.stringify(v); }
+    else if (typeof v === 'number') { span.className = 'jt-num'; span.textContent = String(v); }
+    else if (typeof v === 'boolean') { span.className = 'jt-bool'; span.textContent = String(v); }
+    else { span.textContent = String(v); }
+    return span;
+  }
+  function jtNode(key, v, depth, openPath, pathSoFar) {
+    const isObj = v && typeof v === 'object';
+    const keyEl = document.createElement('span'); keyEl.className = 'jt-key'; keyEl.textContent = typeof key === 'number' ? `[${key}]` : key;
+    if (!isObj) {
+      const row = document.createElement('div'); row.className = 'jt-row';
+      row.append(keyEl, document.createTextNode(': '), jtLeaf(v));
+      return row;
+    }
+    const isArr = Array.isArray(v);
+    const entries = isArr ? v.map((x, i) => [i, x]) : Object.entries(v);
+    const det = document.createElement('details');
+    const sum = document.createElement('summary');
+    const meta = document.createElement('span'); meta.className = 'jt-meta'; meta.textContent = isArr ? ` [${v.length}]` : ` {${entries.length}}`;
+    sum.append(keyEl, meta);
+    det.appendChild(sum);
+    const onPath = openPath && pathSoFar.length <= openPath.length && pathSoFar.every((p, i) => p === openPath[i]);
+    if (onPath && pathSoFar.length === openPath.length) det.classList.add('jt-hl');
+    let built = false;
+    const build = () => {
+      if (built) return; built = true;
+      const box = document.createElement('div'); box.className = 'jt-children';
+      for (const [k, x] of entries) box.appendChild(jtNode(k, x, depth + 1, onPath ? openPath : null, [...pathSoFar, k]));
+      det.appendChild(box);
+    };
+    det.addEventListener('toggle', () => { if (det.open) build(); });
+    if ((depth < 2 && entries.length <= 60) || (onPath && pathSoFar.length < openPath.length)) { det.open = true; build(); }
+    return det;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ★ CẠNH TRANH TOP MARKET
+  // ═══════════════════════════════════════════════════════
+  const CO_EXS = ['bybit', 'bingx', 'mexc'];
+  const CO_STATUS = {
+    'alert-sent': ['⚠️ Đã cảnh báo', 'warn'], active: ['⚠️ Vẫn vượt (đã báo)', 'warn'], cooldown: ['⏳ Vượt — chờ thời gian chờ', 'warn'],
+    ignored: ['🙈 Đã bỏ qua', ''], resolved: ['✅ Hết vượt', 'ok'], ok: ['✅ Cạnh tranh', 'ok'], 'no-boundary': ['— Chưa đặt trần/sàn', ''],
+    'no-competitor': ['— Không có đối thủ phù hợp', ''], 'scan-error': ['❌ Quét lỗi', 'err'], 'no-monitored-ads': ['— Không có QC theo dõi', ''],
+  };
+  const signedNum = v => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${formatNumber(v)}`);
+  state.co = null;
+
+  async function coLoad() {
+    try {
+      const r = await api.get('/api/competition');
+      if (r.code === 0) { state.co = r.data; coRender(); }
+    } catch (_) {}
+    coLoadHistory();
+  }
+  function coSide(ex, side) { return state.co?.exchanges?.[ex]?.[side]; }
+  function coRender() {
+    const d = state.co; if (!d) return;
+    const tb = document.getElementById('coBody');
+    if (!tb) return;
+    if (document.activeElement?.id !== 'coCooldown') setInput('coCooldown', d.cooldownMin);
+    if (document.activeElement?.id !== 'coMinChange') setInput('coMinChange', d.minChangeVnd);
+    const focusId = document.activeElement?.dataset?.coField ? document.activeElement.id : null;
+    tb.innerHTML = CO_EXS.flatMap(ex => ['BUY', 'SELL'].map(side => {
+      const s = coSide(ex, side);
+      const isBuy = side === 'BUY';
+      const bounds = (s.ads || []).filter(a => a.boundary !== null).map(a => a.boundary);
+      const myB = bounds.length ? (bounds.length === 1 ? formatNumber(bounds[0]) : `${formatNumber(Math.min(...bounds))} – ${formatNumber(Math.max(...bounds))}`) : '—';
+      const diffs = (s.ads || []).filter(a => a.diff !== null).map(a => a.diff);
+      const breach = (s.ads || []).some(a => a.breach);
+      const err = s.enabled && s.lastError && (!s.lastScanAt || s.lastErrorAt > s.lastScanAt);
+      const inp = (f, v, ph) => `<input type="number" class="filter-input co-input" id="co-${ex}-${side}-${f}" data-co-field="${f}" value="${v ?? ''}" placeholder="${ph}" min="0" onchange="App.coSaveSide('${ex}','${side}','${f}', this)">`;
+      return `<tr class="${breach ? 'co-breach' : ''}">
+        <td><b>${EX_LABEL[ex]}</b>${s.connected ? '' : ' <span class="text-muted">· chưa kết nối</span>'}</td>
+        <td class="${isBuy ? 'price-buy' : 'price-sell'}">${isBuy ? 'MUA' : 'BÁN'}</td>
+        <td><label class="toggle"><input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="App.coToggle('${ex}','${side}', this)" aria-label="Theo dõi ${EX_LABEL[ex]} ${side}"><span class="toggle-slider"></span></label></td>
+        <td>${inp('refPrice', s.refPrice, 'VND/USDT')}</td>
+        <td>${inp('refLimitMin', s.refLimitMin, 'VND')}</td>
+        <td>${inp('refLimitMax', s.refLimitMax, 'VND')}</td>
+        <td class="mono-cell">${!s.enabled ? '<span class="text-muted">—</span>' : err ? `<span class="co-err" title="${escAttr(s.lastError)}">❌ ${escapeHtml(String(s.lastError).slice(0, 40))}</span>`
+          : s.best ? `<b>${formatNumber(s.best.price)}</b> <span class="text-muted">${escapeHtml(s.best.name)}</span>${RAW_EXS.includes(ex) ? ` <button class="btn-mini" onclick="App.rawOpen('${ex}','${side}','${escAttr(s.best.id)}')" title="Raw API JSON">{ }</button>` : ''}`
+          : s.lastScanAt ? '<span class="text-muted">Không có QC phù hợp</span>' : `<span class="text-muted">⏳ ${escapeHtml(s.waiting || 'Đang chờ')}</span>`}${s.enabled && s.lastScanAt && s.waiting ? `<br><span class="co-st warn">⏳ ${escapeHtml(s.waiting)}</span>` : ''}</td>
+        <td class="mono-cell">${s.enabled ? myB : '—'}</td>
+        <td class="mono-cell ${breach ? 'co-diff-bad' : ''}">${s.enabled && diffs.length ? diffs.map(signedNum).join(', ') : '—'}</td>
+        <td class="mono-cell text-muted">${s.enabled && s.lastScanAt ? timeVN(s.lastScanAt) : '—'}</td>
+      </tr>`;
+    })).join('');
+    if (focusId) document.getElementById(focusId)?.focus();
+    // bảng quảng cáo
+    const ab = document.getElementById('coAdsBody');
+    const rows = [];
+    let alerts = 0;
+    for (const ex of CO_EXS) for (const side of ['BUY', 'SELL']) {
+      const s = coSide(ex, side);
+      if (!s.enabled) continue;
+      for (const a of s.ads || []) {
+        if (a.breach) alerts++;
+        const [txt, cls] = CO_STATUS[a.alertStatus] || [a.alertStatus, ''];
+        const canSet = s.best && a.boundary !== s.best.price;
+        rows.push(`<tr class="${a.breach ? 'co-breach' : ''}">
+          <td>${EX_LABEL[ex]}</td><td class="${side === 'BUY' ? 'price-buy' : 'price-sell'}">${side === 'BUY' ? 'MUA' : 'BÁN'}</td>
+          <td class="mono-cell">${escapeHtml(a.adId)}</td><td class="mono-cell">${formatNumber(a.adPrice)}</td>
+          <td class="mono-cell">${a.boundary !== null ? formatNumber(a.boundary) : '—'} <span class="text-muted">${side === 'BUY' ? 'trần' : 'sàn'}</span></td>
+          <td class="mono-cell">${s.best ? formatNumber(s.best.price) : '—'}</td>
+          <td class="mono-cell ${a.breach ? 'co-diff-bad' : ''}">${signedNum(a.diff)}</td>
+          <td><span class="co-st ${cls}">${escapeHtml(txt)}</span></td>
+          <td>${canSet ? `<button class="btn btn-ghost btn-sm" onclick="App.coApply('${ex}','${side}','${escAttr(a.adId)}', ${s.best.price})">${side === 'BUY' ? 'Đặt trần' : 'Đặt sàn'} = ${formatNumber(s.best.price)}</button>` : ''}</td>
+        </tr>`);
+      }
+    }
+    ab.innerHTML = rows.length ? rows.join('') : '<tr class="empty-row"><td colspan="9"><div class="empty-state"><p>Không có quảng cáo nào đang theo dõi (cần bật theo dõi + QC bật Auto Repricing, online)</p></div></td></tr>';
+    const badge = document.getElementById('coAlertBadge');
+    if (badge) badge.textContent = alerts ? ` ⚠️${alerts}` : '';
+    const anyOn = CO_EXS.some(ex => coSide(ex, 'BUY').enabled || coSide(ex, 'SELL').enabled);
+    const dot = document.getElementById('exDot-competition');
+    if (dot) dot.className = 'ex-dot' + (anyOn ? ' on' : '');
+  }
+  async function coToggle(ex, side, el) {
+    const r = await api.post(`/api/competition/config/${ex}/${side}`, { enabled: el.checked });
+    if (r.code !== 0) { showToast(r.msg, 'error'); el.checked = !el.checked; return; }
+    showToast(`${EX_LABEL[ex]} ${side === 'BUY' ? 'MUA' : 'BÁN'}: ${el.checked ? 'đã bật' : 'đã tắt'} theo dõi`, 'success');
+    coLoad();
+  }
+  async function coSaveSide(ex, side, field, el) {
+    const v = el.value === '' ? null : Number(el.value);
+    const r = await api.post(`/api/competition/config/${ex}/${side}`, { [field]: v });
+    if (r.code !== 0) { showToast(r.msg, 'error'); coLoad(); return; }
+    showToast('Đã lưu', 'success');
+    coLoad();
+  }
+  async function coSaveGlobal() {
+    const r = await api.post('/api/competition/settings', { cooldownMin: Number(document.getElementById('coCooldown').value), minChangeVnd: Number(document.getElementById('coMinChange').value) });
+    if (r.code !== 0) { showToast(r.msg, 'error'); coLoad(); return; }
+    showToast('Đã lưu', 'success');
+  }
+  async function coRefresh() {
+    const info = document.getElementById('coInfo'); if (info) info.textContent = 'Đang đánh giá lại...';
+    const r = await api.post('/api/competition/refresh', {});
+    if (r.code === 0) { state.co = r.data; coRender(); }
+    if (info) info.textContent = `Đánh giá lại lúc ${timeVN(Date.now())} (trên lượt quét gần nhất của Auto Pricing)`;
+    coLoadHistory();
+  }
+  async function coApply(ex, side, adId, value) {
+    const what = side === 'BUY' ? 'Trần giá MUA' : 'Sàn giá BÁN';
+    const running = state.engine?.[ex]?.running;
+    const msg = `Đặt ${what} của quảng cáo ${EX_LABEL[ex]} #${adId} = ${formatNumber(value)} VND?\n\n`
+      + (running ? 'Auto Pricing đang chạy: engine sẽ tính lại giá và đổi giá quảng cáo nếu cần.' : 'Auto Pricing đang dừng: chỉ lưu cấu hình, KHÔNG đổi giá quảng cáo.');
+    if (!window.confirm(msg)) return;
+    const r = await api.post('/api/competition/apply', { ex, side, adId, value, confirmed: true });
+    if (r.code !== 0) { showToast(`Không thành công: ${r.msg}`, 'error'); return; }
+    const rc = r.data?.recalc;
+    showToast(`Đã đặt ${what} = ${formatNumber(value)}${rc?.applied ? ` · giá QC mới ${formatNumber(rc.target)}` : rc?.note ? ` · ${rc.note}` : ''}`, 'success');
+    coLoad();
+  }
+  async function coLoadHistory() {
+    try {
+      const r = await api.get('/api/competition/history?limit=60');
+      if (r.code !== 0) return;
+      const tb = document.getElementById('coHistBody'); if (!tb) return;
+      tb.innerHTML = r.data.length ? r.data.map(h => {
+        const [txt, cls] = CO_STATUS[h.alertStatus] || [h.alertStatus, ''];
+        return `<tr><td class="mono-cell text-muted">${timeVN(h.at)}</td><td>${EX_LABEL[h.ex] || h.ex}</td><td>${h.side === 'BUY' ? 'MUA' : 'BÁN'}</td>
+          <td class="mono-cell">${h.adId ? escapeHtml(h.adId) : '—'}</td><td class="mono-cell">${formatNumber(h.boundary)}</td><td class="mono-cell">${formatNumber(h.best)}</td>
+          <td class="mono-cell">${signedNum(h.diff)}</td><td><span class="co-st ${cls}">${escapeHtml(txt)}</span>${h.delivery ? ` <span class="text-muted">${escapeHtml(h.delivery)}</span>` : ''}${h.error ? ` <span class="text-muted">${escapeHtml(h.error)}</span>` : ''}</td></tr>`;
+      }).join('') : '<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Chưa có</p></div></td></tr>';
+    } catch (_) {}
+  }
+  function onCompetitionEvent(ev) {
+    if (ev.type === 'state' && state.co?.exchanges?.[ev.ex]) { state.co.exchanges[ev.ex][ev.side] = ev.state; coRender(); }
+    else if (ev.type === 'config') coLoad();
+    if (ev.source === 'telegram' && ev.client !== CLIENT_ID && ev.type === 'state') showToast(`Cạnh tranh ${EX_LABEL[ev.ex]} ${ev.side}: cấu hình đổi từ Telegram`, 'info');
+  }
+  function onCompetitionAlert(a) {
+    showToast(`⚠️ ${EX_LABEL[a.ex]} ${a.side === 'BUY' ? 'MUA: trần' : 'BÁN: sàn'} ${formatNumber(a.boundary)} ${a.side === 'BUY' ? '<' : '>'} Best ${formatNumber(a.best)} (${a.competitor?.name || ''})`, 'error');
+    coLoadHistory();
+  }
+
+  // Nhật ký API market (debug)
+  async function dbgLoad() {
+    const ex = document.getElementById('dbgEx')?.value || '';
+    const tb = document.getElementById('dbgBody'); if (!tb) return;
+    const r = await api.get(`/api/market/debug-log?limit=80${ex ? `&ex=${ex}` : ''}`).catch(err => ({ code: -1, msg: err.message }));
+    if (r.code !== 0) { tb.innerHTML = `<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>${escapeHtml(r.msg || 'Lỗi')}</p></div></td></tr>`; return; }
+    tb.innerHTML = r.data.length ? r.data.map(x => `<tr>
+      <td class="mono-cell text-muted">${timeVN(x.at)}</td><td>${EX_LABEL[x.exchange] || x.exchange}</td><td>${x.side}</td>
+      <td class="mono-cell">${escapeHtml(x.method ? `${x.method} ${x.endpoint}` : '—')}</td>
+      <td class="mono-cell co-params" title="${escAttr(JSON.stringify(x.params))}">${escapeHtml(x.params ? JSON.stringify(x.params) : '—')}</td>
+      <td class="mono-cell">${x.httpStatus ?? '—'}</td><td class="mono-cell">${x.durationMs ?? '—'} ms</td>
+      <td>${x.ok ? '<span class="co-st ok">OK</span>' : `<span class="co-st err">${escapeHtml(x.error || 'Lỗi')}</span>`}</td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="8"><div class="empty-state"><p>Chưa có request nào</p></div></td></tr>';
   }
 
   // ── Telegram ──
@@ -2855,6 +3199,8 @@ function renderBybitAds() {
     mkSetSide,
     mkLoad,
     mkSetMinQty,
+    rawOpen, rawClose, rawView, rawCopy, rawDownload, rawRefresh,
+    coToggle, coSaveSide, coSaveGlobal, coRefresh, coApply, coLoadHistory, dbgLoad,
     saveTelegram,
     testTelegram,
     loadAudit,

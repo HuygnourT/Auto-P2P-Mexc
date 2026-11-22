@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const axios = require('axios');
 const logger = require('../utils/logger');
+const httpTrace = require('../core/httpTrace');
 
 /**
  * Service kết nối BingX P2P OpenAPI.
@@ -153,18 +154,28 @@ class BingxP2P {
     if (req.contentType) headers['Content-Type'] = req.contentType;
 
     logger.debug(`[BingX] ${method} ${path} (${mode}) sign="${req.signingString}"`);
-    const res = await this._http({ method, pathAndQuery: req.pathAndQuery, data: req.data, headers });
+    const startedAt = Date.now();
+    const trace = extra => httpTrace.record({ exchange: 'bingx', method, endpoint: path, params, startedAt, ...extra });
+    let res;
+    try {
+      res = await this._http({ method, pathAndQuery: req.pathAndQuery, data: req.data, headers });
+    } catch (err) {
+      trace({ httpStatus: err.response?.status ?? null, error: err.message });
+      throw err;
+    }
 
     let body;
     try {
       body = safeJsonParse(res.data);
     } catch (e) {
+      trace({ httpStatus: res.status, rawText: String(res.data ?? ''), error: 'Phản hồi không phải JSON' });
       const snippet = String(res.data || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
       const err = new Error(`BingX HTTP ${res.status} — phản hồi không phải JSON: ${snippet}`);
       err.httpStatus = res.status;
       throw err;
     }
     if (typeof body !== 'object' || body === null) body = { code: -1, msg: String(res.data).slice(0, 200) };
+    trace({ httpStatus: res.status, body, rawText: typeof res.data === 'string' ? res.data : null });
     body.__httpStatus = res.status;
     if (body.code !== 0 && !(res.status === 200 && body.code === undefined && !body.msg)) {
       logger.error(`[BingX] ${method} ${path} HTTP ${res.status} code=${body.code} msg=${body.msg}`);

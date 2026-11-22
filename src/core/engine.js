@@ -315,13 +315,14 @@ async function cycleBitget(ctx) {
 // ══════════════════════════════════════════════════════════
 // BYBIT — port từ byRunCycle / byPickBest
 // ══════════════════════════════════════════════════════════
-function bybitPick(items, { reqAmount, priceLimit, isBuy, selfId, onlineOnly }) {
+function bybitPick(items, { reqAmount, priceLimit, isBuy, selfId, onlineOnly, noNationalLimit = true }) {
   const lim = isBlank(priceLimit) || isNaN(parseFloat(priceLimit)) ? null : parseFloat(priceLimit);
   const wl = new Set(whitelist.getWhitelist().map(n => n.toLowerCase()));
   let best = null;
   for (const m of items) {
     if (selfId && String(m.id) === String(selfId)) continue;
     if (onlineOnly && m.online !== true) continue;
+    if (noNationalLimit && m.nationalLimited) continue;   // ad giới hạn quốc gia → không giao dịch được với mình
     const p = m.price;
     if (p === null) continue;
     if (m.name && wl.has(m.name.toLowerCase())) continue;
@@ -355,6 +356,7 @@ async function cycleBybit(ctx) {
     sellMarket = r.items; ctx.log(`Market SELL: ${sellMarket.length} ads${r.cached ? ' (cache)' : ''}`);
   }
   const onlineOnly = sec.onlineOnly !== false;
+  const noNationalLimit = sec.noNationalLimit !== false;
 
   for (const row of rows) {
     if (!ctx.alive()) break;
@@ -363,7 +365,7 @@ async function cycleBybit(ctx) {
     try {
       const items = isBuy ? buyMarket : sellMarket;
       if (!items.length) { ctx.status(row.id, 'Market rỗng', 'warn'); continue; }
-      const ref = bybitPick(items, { reqAmount: parseFloat(row.searchAmount) || 0, priceLimit: row.priceLimit, isBuy, selfId: row.advId, onlineOnly });
+      const ref = bybitPick(items, { reqAmount: parseFloat(row.searchAmount) || 0, priceLimit: row.priceLimit, isBuy, selfId: row.advId, onlineOnly, noNationalLimit });
       if (ref === null) { ctx.status(row.id, 'Không có giá phù hợp', 'warn'); continue; }
       const offset = parseFloat(row.offset) || 0;
       let newPrice = ref + offset;

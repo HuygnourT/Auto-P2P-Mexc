@@ -9,7 +9,7 @@ const bus = new EventEmitter();
 bus.setMaxListeners(50);
 
 const clients = new Set();
-const SSE_EVENTS = ['engine', 'log', 'rowStatus', 'config', 'ads', 'market', 'connection', 'telegram', 'audit', 'marketFilter', 'bestPriceFilter'];
+const SSE_EVENTS = ['engine', 'log', 'rowStatus', 'config', 'ads', 'market', 'connection', 'telegram', 'audit', 'marketFilter', 'bestPriceFilter', 'competition', 'competitionAlert'];
 
 for (const ev of SSE_EVENTS) {
   bus.on(ev, payload => {

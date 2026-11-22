@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const httpTrace = require('../core/httpTrace');
 
 const RECV_WINDOW = '5000';
 
@@ -37,7 +38,11 @@ class BybitP2P {
     const body = JSON.stringify(bodyObj);
     const sign = this._sign(timestamp, body);
 
-    const res = await fetch(this.baseUrl + endpoint, {
+    const startedAt = Date.now();
+    const trace = httpTrace.active() ? (extra) => httpTrace.record({ exchange: 'bybit', method: 'POST', endpoint, params: bodyObj, startedAt, ...extra }) : () => {};
+    let res;
+    try {
+      res = await fetch(this.baseUrl + endpoint, {
       method: 'POST',
       headers: {
         'X-BAPI-API-KEY': this.apiKey,
@@ -47,16 +52,22 @@ class BybitP2P {
         'Content-Type': 'application/json',
       },
       body,
-    });
+      });
+    } catch (err) {
+      trace({ error: err.message });
+      throw err;
+    }
 
     const text = await res.text();
     let data;
     try {
       data = JSON.parse(text);
     } catch (e) {
+      trace({ httpStatus: res.status, rawText: text, error: 'Phản hồi không phải JSON' });
       logger.error(`[Bybit] ${endpoint} HTTP ${res.status} — phản hồi không phải JSON: ${text.slice(0, 300)}`);
       throw new Error(`Bybit trả về không phải JSON (HTTP ${res.status})`);
     }
+    trace({ httpStatus: res.status, body: data, rawText: text });
 
     if (data.ret_code !== 0) {
       logger.error(`[Bybit] ${endpoint} ret_code=${data.ret_code} msg=${data.ret_msg} | raw=${text.slice(0, 300)}`);

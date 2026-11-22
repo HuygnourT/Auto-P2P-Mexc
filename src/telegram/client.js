@@ -38,6 +38,29 @@ class TelegramClient {
       throw e;
     }
   }
+
+  /** Gửi file (vd Raw API JSON) — multipart/form-data */
+  async sendDocument(chatId, filename, content, { caption, contentType = 'application/json', timeoutMs = 30000 } = {}) {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    if (caption) { form.append('caption', caption); form.append('parse_mode', 'HTML'); }
+    form.append('document', new Blob([content], { type: contentType }), filename);
+    try {
+      const res = await axios.post(`${this.base}/bot${this.token}/sendDocument`, form, { timeout: timeoutMs, validateStatus: () => true });
+      const body = res.data || {};
+      if (!body.ok) {
+        const err = new Error(this.sanitize(`Telegram sendDocument: ${body.description || `HTTP ${res.status}`}`));
+        err.tgCode = body.error_code || res.status;
+        throw err;
+      }
+      return body.result;
+    } catch (err) {
+      if (err.tgCode) throw err;
+      const e = new Error(this.sanitize(`Telegram sendDocument: ${err.code || ''} ${err.message}`));
+      e.network = true;
+      throw e;
+    }
+  }
 }
 
 module.exports = TelegramClient;

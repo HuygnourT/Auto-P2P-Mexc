@@ -122,3 +122,26 @@ API mới: `GET /api/market/filters`, `POST /api/market/filters/:ex` (`{ minQty 
 - Điều kiện: chỉ giữ quảng cáo có **Limit Min ≤ số tiền đã chọn ≤ Limit Max** (giao dịch được với số tiền đó). Áp dụng cho cả Best BUY và Best SELL, lưu riêng từng sàn trong `data/settings.json` → `bestPriceFilters`.
 - Không thay đổi Min/Max quảng cáo trên sàn, không ảnh hưởng auto-pricer. Bộ lọc SL khả dụng (USDT) chỉ còn dùng cho Market P2P.
 - API: `GET /api/market/best-filters`, `POST /api/market/best-filters/:ex {limitMin}`, `GET /api/market/best?limitMin=saved|<số>`.
+
+## Debug Raw API JSON — ads đối thủ (MEXC / Bybit / BingX)
+- Web: thẻ "Market — ads đối thủ" → nút `{ } JSON` mỗi dòng (hoặc `{ }` cạnh Best đối thủ ở tab Cạnh tranh). Telegram: "👁 Xem đối thủ" → "📄 Raw API JSON" (gửi file .json).
+- Hiển thị: sàn, mã QC, endpoint, thời điểm request/response, HTTP, thời lượng, tham số request (đã che chữ ký/khóa), vị trí trong response, object gốc (`rawAdvertisement`, không đổi tên trường), response đầy đủ, body HTTP thô, dữ liệu tool đọc ra. Có Copy / Tải về / Lấy mới từ sàn.
+- Ghi rõ "Mới" hay "Cache". Lấy mới lỗi → báo lỗi, không âm thầm thay bằng cache.
+- BingX: số nguyên ≥ 16 chữ số (advertNo) được đọc thành chuỗi để không sai số — xem "Body HTTP thô" để thấy định dạng gốc.
+- Nhật ký request: tab Cạnh tranh → "Nhật ký API market", file `data/market-api-debug.log`.
+- Chỉ xem được trên máy chạy tool (localhost). Muốn mở cho máy khác trong mạng: đặt biến môi trường `RAW_JSON_ALLOW_REMOTE=1`.
+- API: `GET /api/market/raw?ex&side&adId[&refresh=1]`, `GET /api/market/raw/response?snap&call[&format=text][&download=1]`, `GET /api/market/debug-log`.
+
+## Cạnh tranh top market (Bybit / BingX / MEXC)
+- Cảnh báo khi **Trần MUA của tôi < Best BUY đối thủ** hoặc **Sàn BÁN của tôi > Best SELL đối thủ** (trần/sàn của từng QC đang bật Auto Repricing, online).
+- Best BUY = giá cao nhất / Best SELL = giá thấp nhất trong ads đủ điều kiện — giống engine: bỏ ads của bạn, whitelist, (Bybit) chỉ online.
+- 6 công tắc độc lập (sàn × MUA/BÁN). Tắt = không đánh giá/cảnh báo, giữ cấu hình, không ảnh hưởng Auto Pricing.
+- Giá tham chiếu (VND/USDT, phải nằm trong sàn–trần). Limit Min/Max tham chiếu (VND, giới hạn giao dịch) chỉ để lọc đối thủ: giữ ads có khoảng Min–Max giao với khoảng tham chiếu.
+- KHÔNG gọi API sàn riêng (tránh giới hạn API): đánh giá mỗi lần Auto Pricing kiểm tra giá (và khi Giá tốt nhất / Market vừa quét). Auto Pricing dừng → không có dữ liệu mới, không cảnh báo. "Đánh giá lại" dùng lượt quét gần nhất nếu còn mới. Quét lỗi → không so sánh.
+- Chống gửi lặp: báo khi điều kiện xuất hiện / hết rồi xuất hiện lại / giá đối thủ đổi ≥ ngưỡng (mặc định 10 VND); thời gian chờ mặc định 5 phút.
+- Nút "Đặt trần MUA / Đặt sàn BÁN = giá đối thủ" luôn hỏi xác nhận, đi qua đúng quy trình sửa tham số (kiểm tra sàn ≤ trần, lưu, đồng bộ web, tính lại giá). Auto Pricing dừng → chỉ lưu cấu hình, không đổi giá QC.
+- Lưu: `settings.competition`; nhật ký: `data/competition.log` + audit log.
+- API: `GET /api/competition`, `POST /api/competition/config/:ex/:side`, `POST /api/competition/settings`, `POST /api/competition/refresh`, `POST /api/competition/apply` (cần `confirmed: true`), `GET /api/competition/history`.
+
+## Telegram — menu mới
+Quảng cáo của tôi (gộp mọi sàn, lọc ngay dưới danh sách: Online · MUA+BÁN · Auto Bật · Mọi sàn) · Điều khiển Auto Pricing · Cạnh tranh top market · Giá tốt nhất · Market P2P · Làm mới.

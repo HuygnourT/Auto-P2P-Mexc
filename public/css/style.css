@@ -1309,3 +1309,66 @@ body.sse-offline .ex-tabs { box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5); }
   .exs-row { gap: 10px 16px; }
   .exs-actions { margin-left: 0; width: 100%; }
 }
+
+/* ═══ RAW API JSON + CẠNH TRANH TOP MARKET ═══════════════ */
+.btn-mini {
+  font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-input); color: var(--text-secondary); cursor: pointer;
+}
+.btn-mini:hover { color: var(--text-primary); border-color: var(--border-focus); }
+.btn-mini:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
+.rj-overlay { position: fixed; inset: 0; background: rgba(5, 8, 14, 0.72); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.rj-overlay[hidden] { display: none; }
+.rj-modal {
+  width: min(1000px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.rj-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.rj-title { font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.rj-banner { margin: 10px 16px 0; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 12px; border: 1px solid var(--border); color: var(--text-primary); }
+.rj-banner.ok { border-color: var(--green-glow); background: var(--green-bg); }
+.rj-banner.info { background: var(--bg-secondary); }
+.rj-banner.error { border-color: var(--red-glow); background: var(--red-bg); }
+.rj-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; padding: 10px 16px; margin: 0; font-size: 12px; }
+.rj-meta dt { color: var(--text-muted); font-size: 11px; }
+.rj-meta dd { margin: 0; color: var(--text-primary); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.rj-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.rj-views, .rj-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.rj-body { overflow: auto; padding: 12px 16px; min-height: 200px; flex: 1; }
+.rj-pre { font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-all; color: var(--text-primary); }
+.rj-note { font-size: 12px; color: var(--amber); margin-bottom: 8px; }
+
+.jt { font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text-primary); }
+.jt details > summary { cursor: pointer; list-style: none; }
+.jt details > summary::-webkit-details-marker { display: none; }
+.jt details > summary::before { content: '▸'; display: inline-block; width: 14px; color: var(--text-muted); }
+.jt details[open] > summary::before { content: '▾'; }
+.jt-children { padding-left: 16px; border-left: 1px dashed var(--border); margin-left: 5px; }
+.jt-row { padding-left: 14px; overflow-wrap: anywhere; }
+.jt-key { color: #93c5fd; }
+.jt-meta { color: var(--text-muted); }
+.jt-str { color: #86efac; }
+.jt-num { color: #fcd34d; }
+.jt-bool { color: #f9a8d4; }
+.jt-null { color: var(--text-muted); font-style: italic; }
+.jt-hl > summary { background: var(--accent-blue-glow); border-radius: 4px; }
+
+.co-table .co-input { width: 120px; }
+.co-breach td { background: rgba(245, 158, 11, 0.06); }
+.co-diff-bad { color: var(--amber); font-weight: 600; }
+.co-err { color: var(--red); }
+.co-st { font-size: 12px; white-space: nowrap; }
+.co-st.ok { color: var(--green); }
+.co-st.warn { color: var(--amber); }
+.co-st.err { color: var(--red); }
+.co-note { font-size: 12px; color: var(--text-secondary); margin-top: 10px; line-height: 1.5; }
+.co-params { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .rj-overlay { padding: 0; }
+  .rj-modal { max-height: 100vh; height: 100vh; border-radius: 0; }
+  .rj-toolbar { flex-direction: column; align-items: stretch; }
+  .rj-meta { grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+}
+#coAlertBadge { color: var(--amber); }

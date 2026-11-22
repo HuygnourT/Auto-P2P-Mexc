@@ -25,7 +25,7 @@ const RUNTIME_FIELDS = ['lastStatus'];
 const SECTION_DEFAULTS = {
   mexc: { scanInterval: 30, apConfigs: {} },
   bitget: { scanInterval: 1, offsetBuy: -50, offsetSell: 50, filterAmount: '', rows: [] },
-  bybit: { scanInterval: 30, onlineOnly: true, rows: [] },
+  bybit: { scanInterval: 30, onlineOnly: true, noNationalLimit: true, rows: [] },
   bingx: { scanInterval: 30, marketPages: 3, configs: {} },
 };
 
@@ -43,6 +43,7 @@ function load() {
     sec.scanInterval = Number(sec.scanInterval) || SECTION_DEFAULTS[ex].scanInterval;
     if (ex === 'bingx') sec.marketPages = Number(sec.marketPages) || 3;
     if (ex === 'bybit' && sec.onlineOnly === undefined) sec.onlineOnly = true;
+    if (ex === 'bybit' && sec.noNationalLimit === undefined) sec.noNationalLimit = true;   // mặc định: bỏ ads giới hạn quốc gia
     cache[ex] = sec;
   }
   return cache;
@@ -66,7 +67,7 @@ function section(ex) {
 const GLOBAL_FIELDS = {
   mexc: ['scanInterval'],
   bitget: ['scanInterval', 'offsetBuy', 'offsetSell', 'filterAmount'],
-  bybit: ['scanInterval', 'onlineOnly'],
+  bybit: ['scanInterval', 'onlineOnly', 'noNationalLimit'],
   bingx: ['scanInterval', 'marketPages'],
 };
 function patchSettings(ex, patch, meta = {}) {
@@ -76,7 +77,7 @@ function patchSettings(ex, patch, meta = {}) {
     if (patch[f] === undefined) continue;
     let v = patch[f];
     if (f === 'scanInterval' || f === 'marketPages') v = Math.max(1, Number(v) || SECTION_DEFAULTS[ex][f]);
-    else if (f === 'onlineOnly') v = !!v;
+    else if (f === 'onlineOnly' || f === 'noNationalLimit') v = !!v;
     if (sec[f] !== v) { changed[f] = { previous: sec[f], next: v }; sec[f] = v; }
   }
   if (Object.keys(changed).length) {
